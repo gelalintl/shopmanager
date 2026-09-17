@@ -1,0 +1,404 @@
+datasource db {
+  provider = "postgresql" // Ou "mysql" selon votre serveur
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// ENUMS & RÉFÉRENTIELS
+// ==========================================
+
+enum RoleName {
+  SUPER_ADMIN       // Administrateur plateforme SaaS global
+  TENANT_SUPERADMIN // Directeur / DG (SuperAdmin de l'entreprise)
+  ADMIN             // Gestionnaire Niveau 2 (Rapports, validations, clôtures)
+  USER              // Opérateur Niveau 1 (Caisse, stock, création devis)
+}
+
+enum CustomerKind {
+  CORPORATE // Personne morale (Entreprise)
+  INDIVIDUAL // Particulier
+}
+
+enum MovementType {
+  IN  // Entrée de stock (Réapprovisionnement, création)
+  OUT // Sortie de stock (Vente, perte, casse)
+}
+
+enum EstimationStatus {
+  DRAFT      // Brouillon (pas encore numéroté officiellement)
+  SENT       // Devis émis / envoyé
+  ACCEPTED   // Accepté par le client
+  REJECTED   // Refusé
+  ON_GOING   // Rétrocompatibilité (traité comme DRAFT)
+  VALIDATED  // Rétrocompatibilité (traité comme INVOICED)
+  INVOICED   // Transformé en facture
+  CANCELED   // Annulé
+}
+
+enum InvoiceStatus {
+  UNPAID         // Facture émise (0 XOF encaissé)
+  PARTIALLY_PAID // Acompte reçu (Reste à payer > 0 XOF)
+  PAID           // Soldée
+  OVERDUE        // Échéance dépassée
+  CANCELED       // Annulée
+}
+
+enum PaymentMethod {
+  CASH           // Espèces
+  BANK_TRANSFER  // Virement
+  CHECK          // Chèque
+  MOBILE_MONEY   // Mobile money
+}
+
+// ==========================================
+// SAAS & AUDIT LOG
+// ==========================================
+
+model Company {
+  id        Int    @id @default(autoincrement())
+  publicId  String @unique @default(cuid()) // Ex: "cmp_clx..." pour les URLs SaaS
+
+  name      String
+  address   String
+  nif       String?
+  logoPath  String?
+  phone1    String
+  phone2    String?
+  email     String?
+  slogan    String?
+  postBox   String?
+  rib       String?
+  legalMentions String?
+  printSettings Json?
+
+  isActive  Boolean @default(true) // Verrouillage SaaS si besoin
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations Multi-Tenant
+  users             User[]
+  customers         Customer[]
+  products          Product[]
+  stockMovements    StockMovement[]
+  estimations       Estimation[]
+  invoices          Invoice[]
+  collections       Collection[]
+  documentSequences DocumentSequence[]
+  auditLogs         AuditLog[]
+
+  @@map("companies")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  publicId  String   @unique @default(cuid())
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action    String   // Ex: "CREATE_ESTIMATION", "LOGIN", "CANCEL_INVOICE"
+  entity    String   // Ex: "Invoice", "Product"
+  entityId  String   // publicId de la ressource affectée
+  oldData   Json?    // État avant modification
+  newData   Json?    // État après modification
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, entity, entityId])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// UTILISATEURS & RÔLES
+// ==========================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  publicId  String   @unique @default(cuid())
+
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  pseudo    String
+  name      String
+  password  String   // Hash bcrypt/argon2
+  role      RoleName @default(USER)
+
+  // Soft Delete & Traçabilité
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations d'audit applicatif
+  customersCreated Customer[]      @relation("CustomerCreator")
+  productsCreated  Product[]       @relation("ProductCreator")
+  movementsCreated StockMovement[] @relation("MovementCreator")
+  estimations      Estimation[]    @relation("EstimationCreator")
+  invoices         Invoice[]       @relation("InvoiceCreator")
+  collections      Collection[]    @relation("CollectionCollector")
+  auditLogs        AuditLog[]
+
+  @@unique([companyId, pseudo]) // Pseudo unique PAR entreprise
+  @@index([publicId])
+  @@map("users")
+}
+
+// ==========================================
+// CLIENTS
+// ==========================================
+
+model Customer {
+  id        Int          @id @default(autoincrement())
+  publicId  String       @unique @default(cuid()) // Ex: "cus_clx..."
+
+  companyId Int
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  kind      CustomerKind @default(INDIVIDUAL)
+  name      String
+  postBox   String?
+  email     String?
+  phone     String?
+  nif       String?
+  address   String
+
+  createdById Int
+  createdBy   User     @relation("CustomerCreator", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  estimations    Estimation[]
+  invoices       Invoice[]
+  stockMovements StockMovement[]
+
+  @@index([publicId])
+  @@index([companyId, name])
+  @@map("customers")
+}
+
+// ==========================================
+// CATALOGUE & STOCK
+// ==========================================
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  publicId    String  @unique @default(cuid()) // Ex: "prd_clx..."
+
+  companyId   Int
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  code           String  // Ex: "CAB012"
+  designation    String
+  unitPrice      BigInt  // Prix unitaire de vente (XOF)
+  purchasePrice  BigInt? // Prix d'achat optionnel (XOF)
+  alertThreshold Int     @default(0) // Seuil d'alerte stock
+
+  createdById Int
+  createdBy   User     @relation("ProductCreator", fields: [createdById], references: [id])
+
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  movements       StockMovement[]
+  estimationItems EstimationItem[]
+
+  @@unique([companyId, code]) // Code unique au sein de la même entreprise
+  @@index([publicId])
+  @@map("products")
+}
+
+model StockMovement {
+  id           BigInt       @id @default(autoincrement())
+  publicId     String       @unique @default(cuid())
+
+  companyId    Int
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  type         MovementType
+  quantity     Int          // Toujours positif
+  sellingPrice BigInt       @default(0)
+
+  productId    Int
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // Client optionnel : NULL = Opération interne entreprise (ex-client magique id=1)
+  customerId   Int?
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Lien optionnel vers la ligne de devis source
+  estimationItemId BigInt?
+  estimationItem   EstimationItem? @relation(fields: [estimationItemId], references: [id], onDelete: SetNull)
+
+  createdById  Int
+  createdBy    User         @relation("MovementCreator", fields: [createdById], references: [id])
+
+  isDeleted    Boolean      @default(false)
+  deletedAt    DateTime?
+
+  createdAt    DateTime     @default(now())
+
+  @@index([publicId])
+  @@index([companyId, productId])
+  @@map("stock_movements")
+}
+
+// ==========================================
+// FACTURATION & DEVIS
+// ==========================================
+
+model Estimation {
+  id          BigInt           @id @default(autoincrement())
+  publicId    String           @unique @default(cuid()) // Ex: "est_clx..."
+
+  companyId   Int
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  code        String           // Format "0001/2026"
+  fiscalYear  Int
+  hasTva      Boolean          @default(true) // 19%
+  warranty    Int              @default(0)
+  status      EstimationStatus @default(DRAFT)
+  totalAmount BigInt           @default(0) // Cache dénormalisé TTC
+  globalDiscountRate Float     @default(0)
+  notes       String?
+  dueDate     DateTime?
+  issueDate   DateTime         @default(now())
+  validityDays Int             @default(30)
+
+  customerId  Int
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  createdById Int
+  createdBy   User             @relation("EstimationCreator", fields: [createdById], references: [id])
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  items       EstimationItem[]
+  invoice     Invoice?
+
+  @@unique([companyId, fiscalYear, code])
+  @@index([publicId])
+  @@map("estimations")
+}
+
+model EstimationItem {
+  id           BigInt     @id @default(autoincrement())
+  publicId     String     @unique @default(cuid())
+
+  estimationId BigInt
+  estimation   Estimation @relation(fields: [estimationId], references: [id], onDelete: Cascade)
+
+  productId    Int
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  designation  String     // Copie figée de la désignation
+  unitPrice    BigInt     // Prix unitaire figé au moment de la création
+  quantity     Int
+  discountRate Float      @default(0) // Remise ligne en %
+  totalPrice   BigInt     // HT après remise ligne
+
+  stockMovements StockMovement[]
+
+  @@index([publicId])
+  @@map("estimation_items")
+}
+
+model Invoice {
+  id           BigInt        @id @default(autoincrement())
+  publicId     String        @unique @default(cuid()) // Ex: "inv_clx..."
+
+  companyId    Int
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  code         String        // Format "F0001/2026"
+  fiscalYear   Int           // Année héritée du devis
+  status       InvoiceStatus @default(UNPAID)
+  dueDate      DateTime?
+
+  estimationId BigInt        @unique // 1:1 avec le devis validé
+  estimation   Estimation    @relation(fields: [estimationId], references: [id], onDelete: Restrict)
+
+  customerId   Int
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  createdById  Int
+  createdBy    User          @relation("InvoiceCreator", fields: [createdById], references: [id])
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  collections  Collection[]
+
+  @@unique([companyId, fiscalYear, code])
+  @@index([publicId])
+  @@map("invoices")
+}
+
+model Collection {
+  id          BigInt   @id @default(autoincrement())
+  publicId    String   @unique @default(cuid()) // Ex: "col_clx..."
+
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  amount      BigInt   // Montant encaissé (XOF)
+  paymentDate DateTime @default(now())
+  paymentMethod PaymentMethod @default(CASH)
+  note        String?
+
+  invoiceId   BigInt
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  collectorId Int
+  collector   User     @relation("CollectionCollector", fields: [collectorId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([publicId])
+  @@index([companyId, invoiceId])
+  @@map("collections")
+}
+
+// ==========================================
+// COMPTEURS & SÉQUENCES ATOMIQUES
+// ==========================================
+
+model DocumentSequence {
+  id         Int     @id @default(autoincrement())
+
+  companyId  Int
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fiscalYear Int
+  type       String  // "ESTIMATION" ou "INVOICE"
+  lastValue  Int     @default(0)
+
+  @@unique([companyId, fiscalYear, type])
+  @@map("document_sequences")
+}

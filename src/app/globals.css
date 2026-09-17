@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --powder: #f8fafc;
+  --soft-cobalt: #eff6ff;
+  --soft-cobalt-strong: #dbeafe;
+  --subtle-border: #e2e8f0;
+  --foreground: #0f172a;
+  --foreground-muted: #64748b;
+  --cobalt: #1d4ed8;
+  --cobalt-hover: #1e40af;
+  --primary: var(--cobalt);
+  --primary-hover: var(--cobalt-hover);
+  --danger: #dc6b6b;
+}
+
+@theme inline {
+  --font-sans: var(--font-pt-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-powder: var(--powder);
+  --color-soft-cobalt: var(--soft-cobalt);
+  --color-soft-cobalt-strong: var(--soft-cobalt-strong);
+  --color-subtle-border: var(--subtle-border);
+  --color-background: var(--powder);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-hover: var(--cobalt-hover);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-danger: var(--danger);
+  --color-ring: var(--cobalt);
+}
+
+html,
+body {
+  background: var(--powder);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .invoice-print-sheet {
+    box-shadow: none !important;
+    min-height: 297mm;
+    width: 210mm;
+  }
+
+  .receipt-print-sheet {
+    box-shadow: none !important;
+    min-height: 210mm;
+    width: 148mm;
+  }
+}
