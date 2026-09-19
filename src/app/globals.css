@@ -59,9 +59,53 @@ body {
     width: 210mm;
   }
 
+  .invoice-print-sheet--a5 {
+    min-height: 210mm;
+    width: 148mm;
+  }
+
   .receipt-print-sheet {
     box-shadow: none !important;
     min-height: 210mm;
     width: 148mm;
   }
+
+  .pos-ticket-sheet {
+    box-shadow: none !important;
+    width: 80mm;
+    min-height: auto;
+  }
+
+  .pos-ticket-sheet--a5 {
+    width: 148mm;
+    min-height: 210mm;
+  }
+
+  .pos-ticket-sheet--a4 {
+    width: 210mm;
+    min-height: 297mm;
+  }
+
+  .print-page {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .pos-cut-rule {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+}
+
+[data-sonner-toaster] {
+  font-family: var(--font-sans);
 }

@@ -1,8 +1,17 @@
+import { UserRole } from '@prisma/client'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+export type TenantUser = {
+  id: number
+  publicId: string
+  companyId: number
+  role: UserRole
+  name: string
+}
+
 export type TenantContext =
-  | { ok: true; user: { id: number; companyId: number } }
+  | { ok: true; user: TenantUser }
   | { ok: false; error: string }
 
 export async function getTenantContext(): Promise<TenantContext> {
@@ -21,10 +30,10 @@ export async function getTenantContext(): Promise<TenantContext> {
       isDeleted: false,
       ...(publicId ? { publicId } : { pseudo: pseudo ?? '' }),
     },
-    select: { id: true, companyId: true },
+    select: { id: true, publicId: true, companyId: true, role: true, name: true },
   })
 
-  if (!user) {
+  if (!user || user.companyId !== companyId) {
     return { ok: false, error: 'Utilisateur introuvable.' }
   }
 

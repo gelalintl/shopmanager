@@ -3,14 +3,26 @@
 import { FormEvent, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
 import {
+  cancelInvoice,
   convertEstimationToInvoice,
+  reviewInvoiceCancellation,
 } from '@/app/dashboard/invoices/actions'
 import { PaymentDialog } from '@/components/payments/payment-dialog'
+import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-note-modal'
+import {
+  CancellationRequestBadge,
+  CancellationRequestModal,
+} from '@/components/invoices/cancellation-request-modal'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { toastResult } from '@/lib/notify'
+import { toast } from 'sonner'
 import {
   formatCfa,
   statusClass,
@@ -20,9 +32,13 @@ import {
 import { cn } from '@/lib/cn'
 import {
   IconArrowRightLeft,
+  IconBan,
   IconCheckCircle,
   IconEye,
   IconPrinter,
+  IconTrash,
+  IconUndo,
+  IconXCircle,
 } from '@/components/ui/icons'
 
 type InvoiceTableProps = {
@@ -31,11 +47,40 @@ type InvoiceTableProps = {
 
 export function InvoiceTable({ documents }: InvoiceTableProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isManager = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
   const [convertId, setConvertId] = useState<string | null>(null)
   const [payId, setPayId] = useState<string | null>(null)
+  const [creditDoc, setCreditDoc] = useState<DocumentListItem | null>(null)
+  const [cancelDoc, setCancelDoc] = useState<DocumentListItem | null>(null)
+  const [reviewId, setReviewId] = useState<string | null>(null)
+  const { runRestricted, modal } = useRestrictedAction()
+  const { confirm, dialog } = useConfirmDialog()
 
   const convertDoc = documents.find((item) => item.estimationPublicId === convertId)
   const payDoc = documents.find((item) => item.invoicePublicId === payId)
+
+  async function handleReview(invoicePublicId: string, approved: boolean, code: string) {
+    const confirmed = await confirm({
+      title: approved ? 'Approuver l’annulation' : 'Rejeter la demande',
+      description: approved
+        ? `Approuver l’annulation de ${code} ? Le stock sera réintégré.`
+        : `Rejeter la demande d’annulation de ${code} ? La facture reprendra son statut d’origine.`,
+      confirmLabel: approved ? 'Approuver' : 'Rejeter',
+      variant: approved ? 'solid' : 'danger',
+    })
+    if (!confirmed) return
+    setReviewId(invoicePublicId)
+    const result = await reviewInvoiceCancellation(invoicePublicId, approved)
+    setReviewId(null)
+    if (result.ok) {
+      if (approved) toast.success('Annulation approuvée. Le stock a été réintégré.')
+      else toast.error('Demande d’annulation rejetée.')
+      router.refresh()
+    } else {
+      toast.error(result.error)
+    }
+  }
 
   return (
     <>
@@ -65,14 +110,24 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                     <td className="overflow-hidden px-4 py-3 align-middle">
                       <Text weight="bold" className="truncate">{doc.code}</Text>
                       <Caption className="block">{doc.kind === 'INVOICE' ? 'Facture' : 'Devis'}</Caption>
+                      {doc.kind === 'INVOICE' ? (
+                        <CreditNoteBadge
+                          count={doc.creditNoteCount}
+                          href={`/dashboard/invoices/${doc.estimationPublicId}#avoirs`}
+                        />
+                      ) : null}
                     </td>
                     <td className="overflow-hidden px-4 py-3 align-middle">
                       <span className="block truncate">{doc.customerName}</span>
                     </td>
                     <td className="px-4 py-3 align-middle">
-                      <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[doc.status])}>
-                        {statusLabels[doc.status]}
-                      </span>
+                      {doc.status === 'PENDING_CANCELLATION' ? (
+                        <CancellationRequestBadge reason={doc.cancelReason} />
+                      ) : (
+                        <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[doc.status])}>
+                          {statusLabels[doc.status]}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-middle whitespace-nowrap">{formatCfa(doc.totalTtc)}</td>
                     <td className="px-4 py-3 align-middle whitespace-nowrap">{formatCfa(doc.remaining)}</td>
@@ -106,7 +161,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                             <IconArrowRightLeft className="h-4 w-4" />
                           </button>
                         ) : null}
-                        {doc.invoicePublicId && doc.status !== 'PAID' && doc.status !== 'CANCELED' ? (
+                        {doc.invoicePublicId && doc.status !== 'PAID' && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
                           <button
                             type="button"
                             title="Action rapide"
@@ -115,6 +170,75 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                             onClick={() => setPayId(doc.invoicePublicId)}
                           >
                             <IconCheckCircle className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {doc.kind === 'INVOICE' && doc.invoicePublicId && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
+                          <button
+                            type="button"
+                            title="Créer un Avoir / Remboursement"
+                            aria-label="Créer un Avoir / Remboursement"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-orange-700 transition-all duration-200 hover:bg-orange-50"
+                            onClick={() => setCreditDoc(doc)}
+                          >
+                            <IconUndo className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {!isManager && doc.kind === 'INVOICE' && doc.invoicePublicId && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
+                          <button
+                            type="button"
+                            title="Demander l’annulation"
+                            aria-label="Demander l’annulation"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 text-red-600 transition-all duration-200 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => setCancelDoc(doc)}
+                          >
+                            <IconBan className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {isManager && doc.kind === 'INVOICE' && doc.invoicePublicId && doc.status === 'PENDING_CANCELLATION' ? (
+                          <>
+                            <button
+                              type="button"
+                              title="Approuver l’annulation"
+                              aria-label="Approuver l’annulation"
+                              disabled={reviewId === doc.invoicePublicId}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 text-emerald-600 transition-all duration-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+                              onClick={() => void handleReview(doc.invoicePublicId as string, true, doc.code)}
+                            >
+                              <IconCheckCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Rejeter la demande"
+                              aria-label="Rejeter la demande"
+                              disabled={reviewId === doc.invoicePublicId}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 text-red-600 transition-all duration-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                              onClick={() => void handleReview(doc.invoicePublicId as string, false, doc.code)}
+                            >
+                              <IconXCircle className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : null}
+                        {isManager && doc.kind === 'INVOICE' && doc.invoicePublicId && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
+                          <button
+                            type="button"
+                            title="Annuler la facture"
+                            aria-label="Annuler la facture"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-danger transition-all duration-200 hover:bg-red-50"
+                            onClick={() =>
+                              void runRestricted({
+                                title: 'Annuler la facture',
+                                description: `Confirmer l’annulation de ${doc.code}. Le stock sera réintégré.`,
+                                requireReason: true,
+                                successMessage: 'Facture annulée.',
+                                run: async (proof) => {
+                                  const result = await cancelInvoice(doc.invoicePublicId as string, proof)
+                                  if (result.ok) router.refresh()
+                                  return result
+                                },
+                              })
+                            }
+                          >
+                            <IconTrash className="h-4 w-4" />
                           </button>
                         ) : null}
                       </div>
@@ -152,6 +276,34 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
           }}
         />
       ) : null}
+      {creditDoc?.invoicePublicId ? (
+        <CreditNoteModal
+          open
+          invoicePublicId={creditDoc.invoicePublicId}
+          invoiceCode={creditDoc.code}
+          maxAmount={creditDoc.paidAmount}
+          onClose={() => setCreditDoc(null)}
+          onDone={(publicId) => {
+            setCreditDoc(null)
+            router.refresh()
+            window.open(`/dashboard/invoices/credit-notes/${publicId}/print?format=ticket`, '_blank')
+          }}
+        />
+      ) : null}
+      {cancelDoc?.invoicePublicId ? (
+        <CancellationRequestModal
+          open
+          invoicePublicId={cancelDoc.invoicePublicId}
+          invoiceCode={cancelDoc.code}
+          onClose={() => setCancelDoc(null)}
+          onDone={() => {
+            setCancelDoc(null)
+            router.refresh()
+          }}
+        />
+      ) : null}
+      {modal}
+      {dialog}
     </>
   )
 }
@@ -165,7 +317,6 @@ function ConvertDialog({
   onClose: () => void
   onDone: (id: string) => void
 }) {
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [depositType, setDepositType] = useState<'none' | 'percent' | 'amount'>('none')
 
@@ -173,7 +324,6 @@ function ConvertDialog({
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     setLoading(true)
-    setError(null)
     const result = await convertEstimationToInvoice({
       estimationPublicId: document.estimationPublicId,
       depositType: depositType === 'none' ? null : depositType,
@@ -181,17 +331,13 @@ function ConvertDialog({
       dueDate: String(form.get('dueDate') || '') || null,
     })
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Facture créée.')) return
     onDone(result.publicId ?? document.estimationPublicId)
   }
 
   return (
     <Modal title={`Convertir ${document.code} en facture`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        {error ? <Caption color="danger" className="italic">*{error}</Caption> : null}
         <label className="mt-2 block text-sm font-bold">
           Acompte
           <select

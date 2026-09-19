@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { CustomerKind, EstimationStatus, InvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getTenantContext } from '@/lib/tenant'
+import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import {
   digitsOnly,
   toCatalogCustomer,
@@ -15,6 +17,7 @@ import {
   type CustomerTypeFilter,
 } from '@/lib/customers'
 import {
+  invoiceSettlement,
   normalizeEstimationStatus,
   resolveInvoiceStatus,
   type CatalogCustomer,
@@ -95,13 +98,15 @@ function mapListItem(row: {
   invoices: Array<{
     estimation: { totalAmount: bigint }
     collections: Array<{ amount: bigint }>
+    creditNotes: Array<{ amount: bigint }>
   }>
 }): CustomerListItem {
   const billed = row.invoices.reduce((sum, invoice) => sum + Number(invoice.estimation.totalAmount), 0)
-  const collected = row.invoices.reduce(
-    (sum, invoice) => sum + invoice.collections.reduce((inner, col) => inner + Number(col.amount), 0),
-    0,
-  )
+  const collected = row.invoices.reduce((sum, invoice) => {
+    const payments = invoice.collections.reduce((inner, col) => inner + Number(col.amount), 0)
+    const credits = invoice.creditNotes.reduce((inner, note) => inner + Number(note.amount), 0)
+    return sum + invoiceSettlement(Number(invoice.estimation.totalAmount), payments, credits).netPaid
+  }, 0)
 
   return {
     publicId: row.publicId,
@@ -166,6 +171,7 @@ export async function getCustomers(
       select: {
         estimation: { select: { totalAmount: true } },
         collections: { where: { isDeleted: false }, select: { amount: true } },
+        creditNotes: { select: { amount: true } },
       },
     },
   } as const
@@ -260,12 +266,17 @@ export async function updateCustomer(id: string, data: CustomerInput): Promise<A
   }
 }
 
-export async function deleteCustomer(id: string): Promise<ActionResult> {
+export async function deleteCustomer(id: string, adminProof?: AdminProof | null): Promise<ActionResult> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const existing = await findOwnedCustomer(ctx.user.companyId, id)
-  if (!existing) return { ok: false, error: 'Client introuvable.' }
+  if (!existing || !assertSameCompany(ctx.user.companyId, existing.companyId)) {
+    return { ok: false, error: 'Client introuvable.' }
+  }
+
+  const authz = await authorizeMutation(MANAGER_ROLES, adminProof, existing.companyId)
+  if (!authz.ok) return authz
 
   try {
     await prisma.customer.update({
@@ -298,6 +309,7 @@ export async function getCustomerDetails(id: string): Promise<CustomerDetails | 
         include: {
           estimation: { select: { publicId: true, totalAmount: true, code: true } },
           collections: { where: { isDeleted: false }, select: { amount: true } },
+          creditNotes: { select: { amount: true } },
         },
         orderBy: { createdAt: 'desc' },
       },
@@ -321,15 +333,20 @@ export async function getCustomerDetails(id: string): Promise<CustomerDetails | 
       totalTtc: Number(item.totalAmount),
       paidAmount: 0,
       remaining: Number(item.totalAmount),
+      creditNoteCount: 0,
+      creditNoteTotal: 0,
+      cancelReason: null,
+      cancelRequestedAt: null,
       createdAt: item.createdAt.toISOString(),
       dueDate: item.dueDate?.toISOString() ?? null,
     }
   })
 
   const invoiceDocs: DocumentListItem[] = customer.invoices.map((item) => {
-    const paidAmount = item.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+    const collected = item.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+    const credited = item.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
     const totalTtc = Number(item.estimation.totalAmount)
-    const remaining = Math.max(totalTtc - paidAmount, 0)
+    const settlement = invoiceSettlement(totalTtc, collected, credited)
     return {
       publicId: item.publicId,
       estimationPublicId: item.estimation.publicId,
@@ -337,10 +354,14 @@ export async function getCustomerDetails(id: string): Promise<CustomerDetails | 
       kind: 'INVOICE',
       code: item.code,
       customerName: customer.name,
-      status: resolveInvoiceStatus(item.status, remaining, item.dueDate),
+      status: resolveInvoiceStatus(item.status, settlement.remaining, item.dueDate),
       totalTtc,
-      paidAmount,
-      remaining,
+      paidAmount: settlement.netPaid,
+      remaining: settlement.remaining,
+      creditNoteCount: item.creditNotes.length,
+      creditNoteTotal: settlement.credited,
+      cancelReason: item.cancelReason,
+      cancelRequestedAt: item.cancelRequestedAt?.toISOString() ?? null,
       createdAt: item.createdAt.toISOString(),
       dueDate: item.dueDate?.toISOString() ?? null,
     }

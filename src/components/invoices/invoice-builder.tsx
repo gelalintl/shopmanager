@@ -9,6 +9,7 @@ import { CustomerModal } from '@/components/customers/customer-modal'
 import { InvoiceLineRow } from '@/components/invoices/invoice-line-row'
 import { InvoicePrintTemplate } from '@/components/invoices/invoice-print-template'
 import { createDocument } from '@/app/dashboard/invoices/actions'
+import { toastResult } from '@/lib/notify'
 import { useProductContext } from '@/context/product-context'
 import type { Product } from '@/components/invoices/product-combobox'
 import {
@@ -66,7 +67,6 @@ export function InvoiceBuilder({
   const [lines, setLines] = useState<InvoiceItem[]>([emptyLine()])
   const [customerOpen, setCustomerOpen] = useState(false)
   const [extraCustomers, setExtraCustomers] = useState<CatalogCustomer[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<'draft' | 'official' | null>(null)
 
   const allCustomers = useMemo(() => {
@@ -129,7 +129,6 @@ export function InvoiceBuilder({
 
   async function save(official: boolean) {
     setLoading(official ? 'official' : 'draft')
-    setError(null)
     const result = await createDocument({
       kind,
       official,
@@ -150,10 +149,15 @@ export function InvoiceBuilder({
       })),
     })
     setLoading(null)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    const success =
+      kind === 'INVOICE'
+        ? official
+          ? 'Facture créée'
+          : 'Brouillon enregistré.'
+        : official
+          ? 'Devis créé.'
+          : 'Brouillon enregistré.'
+    if (!toastResult(result, success)) return
     router.push(result.publicId ? `/dashboard/invoices/${result.publicId}` : '/dashboard/invoices')
     router.refresh()
   }
@@ -164,11 +168,6 @@ export function InvoiceBuilder({
         <Heading as="h2" size="lg">
           {kind === 'INVOICE' ? 'Nouvelle facture' : 'Nouveau devis'}
         </Heading>
-        {error ? (
-          <Caption color="danger" className="mt-2 italic">
-            *{error}
-          </Caption>
-        ) : null}
 
         <div className="mt-4 rounded-xl border border-subtle-border/80 bg-powder/50 p-4">
           <Caption className="uppercase tracking-wide">Informations générales</Caption>

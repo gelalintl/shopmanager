@@ -5,9 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
+import { IconPackagePlus, IconPencil, IconTrash } from '@/components/ui/icons'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { deleteProduct, restockProduct } from '@/app/dashboard/products/actions'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { cn } from '@/lib/cn'
 import { formatCfa, getStockStatus, type ProductListItem } from '@/lib/products'
+import { toastResult } from '@/lib/notify'
+import { toast } from 'sonner'
 
 type ProductTableProps = {
   products: ProductListItem[]
@@ -20,17 +25,28 @@ const stockBadge: Record<string, { label: string; className: string }> = {
   out: { label: 'Rupture', className: 'bg-red-50 text-red-700' },
 }
 
+const iconBtn =
+  'inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 transition-all duration-200 disabled:opacity-50'
+
 export function ProductTable({ products, onEdit }: ProductTableProps) {
   const [restocking, setRestocking] = useState<ProductListItem | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const { runRestricted, modal } = useRestrictedAction()
 
-  async function handleDelete(product: ProductListItem) {
-    const confirmed = window.confirm(`Supprimer « ${product.designation} » ?`)
-    if (!confirmed) return
-
-    setPendingId(product.publicId)
-    await deleteProduct(product.publicId)
-    setPendingId(null)
+  function handleDelete(product: ProductListItem) {
+    void runRestricted({
+      title: 'Supprimer le produit',
+      description: `Confirmer la suppression de « ${product.designation} ».`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+      successMessage: 'Produit supprimé.',
+      run: async (proof) => {
+        setPendingId(product.publicId)
+        const result = await deleteProduct(product.publicId, proof)
+        setPendingId(null)
+        return result
+      },
+    })
   }
 
   return (
@@ -43,7 +59,7 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                 <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Désignation / Référence</th>
                 <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Prix unitaire</th>
                 <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Quantité en stock</th>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Actions</th>
+                <th className="w-36 px-3 py-3 text-sm font-bold text-foreground-muted">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -77,33 +93,36 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                           {product.quantity} · {badge.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            title="Modifier le Produit"
+                      <td className="whitespace-nowrap px-3 py-2 align-middle">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Éditer le produit"
+                            aria-label="Éditer le produit"
+                            className={cn(iconBtn, 'text-slate-600 hover:bg-slate-100 hover:text-blue-600')}
                             onClick={() => onEdit(product)}
                           >
-                            Éditer
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            title="Réapprovisionner"
+                            <IconPencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Réapprovisionner le stock"
+                            aria-label="Réapprovisionner le stock"
+                            className={cn(iconBtn, 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700')}
                             onClick={() => setRestocking(product)}
                           >
-                            Réapprovisionner
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            title="Supprimer le Produit"
-                            isLoading={pendingId === product.publicId}
+                            <IconPackagePlus className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Supprimer le produit"
+                            aria-label="Supprimer le produit"
+                            disabled={pendingId === product.publicId}
+                            className={cn(iconBtn, 'text-red-600 hover:bg-red-50 hover:text-red-700')}
                             onClick={() => handleDelete(product)}
                           >
-                            Supprimer
-                          </Button>
+                            <IconTrash className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -118,6 +137,7 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
       {restocking ? (
         <RestockDialog product={restocking} onClose={() => setRestocking(null)} />
       ) : null}
+      {modal}
     </>
   )
 }
@@ -129,20 +149,28 @@ function RestockDialog({
   product: ProductListItem
   onClose: () => void
 }) {
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const { confirm, dialog } = useConfirmDialog()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const quantity = Number(new FormData(event.currentTarget).get('quantity'))
-    setLoading(true)
-    setError(null)
-    const result = await restockProduct({ publicId: product.publicId, quantity })
-    setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      toast.error('Saisissez une quantité valide.')
       return
     }
+
+    const confirmed = await confirm({
+      title: 'Réapprovisionner le stock',
+      description: `Ajouter ${quantity} unité(s) à « ${product.designation} » ?`,
+      confirmLabel: 'Confirmer',
+    })
+    if (!confirmed) return
+
+    setLoading(true)
+    const result = await restockProduct({ publicId: product.publicId, quantity })
+    setLoading(false)
+    if (!toastResult(result, 'Stock ajusté.')) return
     onClose()
   }
 
@@ -152,11 +180,6 @@ function RestockDialog({
       <Card className="relative w-full max-w-sm p-6">
         <Text weight="bold">Réapprovisionner {product.designation}</Text>
         <form onSubmit={handleSubmit} className="mt-2">
-          {error ? (
-            <Caption color="danger" className="italic">
-              *{error}
-            </Caption>
-          ) : null}
           <InputField
             id="quantity"
             name="quantity"
@@ -177,6 +200,7 @@ function RestockDialog({
           </div>
         </form>
       </Card>
+      {dialog}
     </div>
   )
 }

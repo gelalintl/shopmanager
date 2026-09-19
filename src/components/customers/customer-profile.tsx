@@ -131,7 +131,7 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
                       {doc.kind === 'INVOICE' ? formatCfa(doc.remaining) : '—'}
                     </td>
                     <td className="px-4 py-3 align-middle">
-                      {doc.kind === 'INVOICE' && doc.invoicePublicId && doc.remaining > 0 && doc.status !== 'CANCELED' ? (
+                      {doc.kind === 'INVOICE' && doc.invoicePublicId && doc.remaining > 0 && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
                         <Button variant="secondary" size="sm" onClick={() => setPaying(doc)}>
                           Enregistrer un règlement
                         </Button>

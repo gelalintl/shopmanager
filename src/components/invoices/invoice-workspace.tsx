@@ -15,6 +15,7 @@ const tabs: { id: InvoiceTab; label: string }[] = [
   { id: 'devis', label: 'Devis' },
   { id: 'factures', label: 'Factures' },
   { id: 'pending', label: 'En attente' },
+  { id: 'cancellations', label: 'Demandes d’annulation' },
   { id: 'paid', label: 'Payées' },
   { id: 'drafts', label: 'Brouillons' },
 ]
@@ -27,6 +28,7 @@ type InvoiceWorkspaceProps = {
   limit: number
   initialTab?: InvoiceTab
   initialFilters?: InvoiceFilterValues
+  cancellationCount?: number
 }
 
 export function InvoiceWorkspace({
@@ -37,6 +39,7 @@ export function InvoiceWorkspace({
   limit,
   initialTab = 'all',
   initialFilters,
+  cancellationCount = 0,
 }: InvoiceWorkspaceProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -101,11 +104,16 @@ export function InvoiceWorkspace({
               className={cn(
                 'rounded-full border px-3 py-1.5 text-sm font-bold transition-all duration-200',
                 tab === item.id
-                  ? 'border-cobalt bg-cobalt text-white'
-                  : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                  ? item.id === 'cancellations'
+                    ? 'border-red-700 bg-red-700 text-white'
+                    : 'border-cobalt bg-cobalt text-white'
+                  : item.id === 'cancellations'
+                    ? 'border-red-200 bg-red-50 text-red-800 hover:border-red-400'
+                    : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
               )}
             >
               {item.label}
+              {item.id === 'cancellations' && cancellationCount > 0 ? ` (${cancellationCount})` : ''}
             </button>
           ))}
         </div>

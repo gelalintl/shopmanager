@@ -2,10 +2,12 @@
 
 import { FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Caption, Heading, Text } from '@/components/ui/typography'
+import { Heading, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
 import { createProduct, updateProduct } from '@/app/dashboard/products/actions'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { useProductContext } from '@/context/product-context'
+import { toastResult } from '@/lib/notify'
 import type { ProductListItem } from '@/lib/products'
 
 type AddProductModalProps = {
@@ -16,9 +18,9 @@ type AddProductModalProps = {
 
 export function AddProductModal({ open, product, onClose }: AddProductModalProps) {
   const editing = Boolean(product)
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { refreshProducts } = useProductContext()
+  const { isManager, runRestricted, modal } = useRestrictedAction()
 
   if (!open) return null
 
@@ -27,27 +29,52 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
     const form = new FormData(event.currentTarget)
 
     setLoading(true)
-    setError(null)
 
-    const result = editing && product
-      ? await updateProduct({
-          publicId: product.publicId,
-          designation: String(form.get('designation') ?? ''),
-          code: String(form.get('code') ?? ''),
-          unitPrice: Number(form.get('unitPrice')),
-          purchasePrice: String(form.get('purchasePrice') ?? '').trim()
-            ? Number(form.get('purchasePrice'))
-            : null,
-          alertThreshold: Number(form.get('alertThreshold') ?? 0),
+    if (editing && product) {
+      const payload = {
+        publicId: product.publicId,
+        designation: String(form.get('designation') ?? ''),
+        code: String(form.get('code') ?? ''),
+        unitPrice: Number(form.get('unitPrice')),
+        purchasePrice: String(form.get('purchasePrice') ?? '').trim()
+          ? Number(form.get('purchasePrice'))
+          : null,
+        alertThreshold: Number(form.get('alertThreshold') ?? 0),
+      }
+
+      const priceChanged = payload.unitPrice !== product.unitPrice
+      if (priceChanged && !isManager) {
+        setLoading(false)
+        void runRestricted({
+          title: 'Modifier le prix de vente',
+          description: `Validation gestionnaire pour changer le prix de « ${product.designation} ».`,
+          successMessage: 'Produit mis à jour.',
+          run: async (proof) => {
+            setLoading(true)
+            const approved = await updateProduct({ ...payload, adminProof: proof })
+            setLoading(false)
+            if (approved.ok) {
+              onClose()
+              void refreshProducts()
+            }
+            return approved
+          },
         })
-      : await createProduct(form)
+        return
+      }
 
-    setLoading(false)
-
-    if (!result.ok) {
-      setError(result.error)
+      const result = await updateProduct(payload)
+      setLoading(false)
+      if (!toastResult(result, 'Produit mis à jour.')) return
+      onClose()
+      void refreshProducts()
       return
     }
+
+    const result = await createProduct(form)
+    setLoading(false)
+
+    if (!toastResult(result, 'Produit créé.')) return
 
     onClose()
     void refreshProducts()
@@ -78,12 +105,6 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col overflow-y-auto px-6 pb-6"
         >
-          {error ? (
-            <Caption color="danger" className="mt-3 italic">
-              *{error}
-            </Caption>
-          ) : null}
-
           <InputField
             id="designation"
             name="designation"
@@ -153,6 +174,7 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
           </div>
         </form>
       </aside>
+      {modal}
     </div>
   )
 }

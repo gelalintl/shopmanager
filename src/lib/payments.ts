@@ -1,4 +1,4 @@
-export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CHECK' | 'MOBILE_MONEY'
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CHECK' | 'MOBILE_MONEY' | 'CARD'
 export type PaymentMethodFilter = 'all' | PaymentMethod
 
 export type PaymentJournalEntry = {
@@ -13,6 +13,10 @@ export type PaymentJournalEntry = {
   customerPublicId: string
   customerName: string
   collectorName: string
+  hasCreditNotes: boolean
+  creditNoteCount: number
+  creditNoteTotal: number
+  refundableAmount: number
 }
 
 export type PaymentReceipt = {
@@ -52,9 +56,10 @@ export type PaymentJournalFilters = {
 
 export const PAYMENT_METHODS: PaymentMethod[] = [
   'CASH',
+  'MOBILE_MONEY',
+  'CARD',
   'BANK_TRANSFER',
   'CHECK',
-  'MOBILE_MONEY',
 ]
 
 export const paymentMethodLabels: Record<PaymentMethod, string> = {
@@ -62,6 +67,7 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
   BANK_TRANSFER: 'Virement',
   CHECK: 'Chèque',
   MOBILE_MONEY: 'Mobile money',
+  CARD: 'Carte',
 }
 
 export const paymentMethodClass: Record<PaymentMethod, string> = {
@@ -69,13 +75,16 @@ export const paymentMethodClass: Record<PaymentMethod, string> = {
   BANK_TRANSFER: 'bg-soft-cobalt text-cobalt',
   CHECK: 'bg-amber-50 text-amber-700',
   MOBILE_MONEY: 'bg-indigo-50 text-indigo-700',
+  CARD: 'bg-violet-50 text-violet-700',
 }
 
 export function parsePaymentMethod(value: unknown): PaymentMethod {
-  const raw = String(value ?? '').trim().toUpperCase()
-  if (raw === 'BANK_TRANSFER' || raw === 'CHECK' || raw === 'MOBILE_MONEY' || raw === 'CASH') {
-    return raw
-  }
+  const raw = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_')
+  if (raw === 'CARTE' || raw === 'CARD' || raw === 'CB') return 'CARD'
+  if (raw === 'BANK_TRANSFER' || raw === 'VIREMENT') return 'BANK_TRANSFER'
+  if (raw === 'CHECK' || raw === 'CHEQUE' || raw === 'CHÈQUE') return 'CHECK'
+  if (raw === 'MOBILE_MONEY' || raw === 'MOBILE') return 'MOBILE_MONEY'
+  if (raw === 'CASH' || raw === 'ESPECES' || raw === 'ESPÈCES') return 'CASH'
   return 'CASH'
 }
 

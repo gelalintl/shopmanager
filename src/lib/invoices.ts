@@ -3,7 +3,7 @@ import { formatCfa } from '@/lib/products'
 export const TVA_RATE = 0.19
 
 export type DocumentKind = 'ESTIMATION' | 'INVOICE'
-export type InvoiceTab = 'all' | 'devis' | 'factures' | 'pending' | 'paid' | 'drafts'
+export type InvoiceTab = 'all' | 'devis' | 'factures' | 'pending' | 'paid' | 'drafts' | 'cancellations'
 
 export type DocumentListFilters = {
   startDate?: string
@@ -24,6 +24,7 @@ export type DocumentStatus =
   | 'PARTIALLY_PAID'
   | 'PAID'
   | 'OVERDUE'
+  | 'PENDING_CANCELLATION'
   | 'CANCELED'
 
 export type DocumentLineInput = {
@@ -117,6 +118,7 @@ export type PrintCompany = {
   legalMentions: string | null
   slogan: string | null
   logoPath?: string | null
+  logoUrl?: string | null
 }
 
 export type PrintCustomer = {
@@ -139,6 +141,10 @@ export type DocumentListItem = {
   totalTtc: number
   paidAmount: number
   remaining: number
+  creditNoteCount: number
+  creditNoteTotal: number
+  cancelReason: string | null
+  cancelRequestedAt: string | null
   createdAt: string
   dueDate: string | null
 }
@@ -200,6 +206,21 @@ export function formatDocumentCode(type: DocumentKind, fiscalYear: number, value
   return `${prefix}-${fiscalYear}-${String(value).padStart(4, '0')}`
 }
 
+export function formatCreditNoteCode(fiscalYear: number, value: number) {
+  return `AV-${fiscalYear}-${String(value).padStart(4, '0')}`
+}
+
+export function invoiceSettlement(ttc: number, collected: number, credited = 0) {
+  const netPaid = Math.max(Math.round(collected) - Math.round(credited), 0)
+  const remaining = Math.max(Math.round(ttc) - netPaid, 0)
+  return {
+    collected: Math.round(collected),
+    credited: Math.round(credited),
+    netPaid,
+    remaining,
+  }
+}
+
 export function normalizeEstimationStatus(status: string): DocumentStatus {
   if (status === 'ON_GOING') return 'DRAFT'
   if (status === 'VALIDATED') return 'INVOICED'
@@ -222,6 +243,7 @@ export function resolveInvoiceStatus(
   dueDate: Date | string | null,
 ): DocumentStatus {
   if (status === 'CANCELED') return 'CANCELED'
+  if (status === 'PENDING_CANCELLATION') return 'PENDING_CANCELLATION'
   if (status === 'PAID' || remaining <= 0) return 'PAID'
   if (dueDate) {
     const due = new Date(dueDate)
@@ -246,6 +268,7 @@ export const statusLabels: Record<DocumentStatus, string> = {
   PARTIALLY_PAID: 'Acompte',
   PAID: 'Payée',
   OVERDUE: 'En retard',
+  PENDING_CANCELLATION: 'Demande d’annulation',
   CANCELED: 'Annulé',
 }
 
@@ -259,6 +282,7 @@ export const statusClass: Record<DocumentStatus, string> = {
   PARTIALLY_PAID: 'bg-orange-50 text-orange-700',
   PAID: 'bg-emerald-50 text-emerald-700',
   OVERDUE: 'bg-red-50 text-red-700',
+  PENDING_CANCELLATION: 'bg-red-100 text-red-800',
   CANCELED: 'bg-slate-100 text-slate-500',
 }
 

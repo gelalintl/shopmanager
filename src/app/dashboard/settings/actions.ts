@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import * as bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { getTenantContext } from '@/lib/tenant'
+import { authorizeMutation } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import {
   defaultPrintSettings,
   parsePrintSettings,
@@ -33,6 +35,12 @@ const LOGO_TYPES: Record<string, string> = {
 
 type ActionResult = { ok: true } | { ok: false; error: string }
 
+async function requireManager() {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return ctx
+  return authorizeMutation(MANAGER_ROLES, null, ctx.user.companyId)
+}
+
 function revalidateSettings() {
   revalidatePath(PATH)
   revalidatePath('/dashboard')
@@ -47,15 +55,15 @@ function isEmail(value: string) {
 }
 
 export async function getSettings(): Promise<SettingsPayload | null> {
-  const ctx = await getTenantContext()
-  if (!ctx.ok) return null
+  const authz = await requireManager()
+  if (!authz.ok) return null
 
   const [company, user] = await Promise.all([
     prisma.company.findFirst({
-      where: { id: ctx.user.companyId, isActive: true },
+      where: { id: authz.user.companyId, isActive: true },
     }),
     prisma.user.findFirst({
-      where: { id: ctx.user.id, companyId: ctx.user.companyId, isDeleted: false },
+      where: { id: authz.user.id, companyId: authz.user.companyId, isDeleted: false },
       select: { name: true, pseudo: true, role: true },
     }),
   ])
@@ -76,7 +84,7 @@ export async function getSettings(): Promise<SettingsPayload | null> {
 }
 
 export async function updateCompanyProfile(data: CompanyProfileInput, logo?: File | null): Promise<ActionResult> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const name = String(data.name ?? '').trim()
@@ -129,7 +137,7 @@ export async function updateCompanyProfile(data: CompanyProfileInput, logo?: Fil
 }
 
 export async function removeCompanyLogo(): Promise<ActionResult> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const company = await prisma.company.findFirst({
@@ -148,7 +156,7 @@ export async function removeCompanyLogo(): Promise<ActionResult> {
 }
 
 export async function updateFinancialSettings(data: FinancialSettingsInput): Promise<ActionResult> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const current = await prisma.company.findFirst({
@@ -175,7 +183,7 @@ export async function updateFinancialSettings(data: FinancialSettingsInput): Pro
 }
 
 export async function updatePrintSettings(data: PrintSettingsInput): Promise<ActionResult> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const current = await prisma.company.findFirst({
@@ -212,7 +220,7 @@ export async function updatePrintSettings(data: PrintSettingsInput): Promise<Act
 }
 
 export async function updateAccountProfile(data: AccountProfileInput): Promise<ActionResult & { name?: string; pseudo?: string }> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const name = String(data.name ?? '').trim()
@@ -240,7 +248,7 @@ export async function updateAccountProfile(data: AccountProfileInput): Promise<A
 }
 
 export async function updatePassword(data: PasswordInput): Promise<ActionResult> {
-  const ctx = await getTenantContext()
+  const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
   const currentPassword = String(data.currentPassword ?? '')

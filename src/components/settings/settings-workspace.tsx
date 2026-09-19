@@ -19,6 +19,8 @@ import {
 } from '@/app/dashboard/settings/actions'
 import { computeTotals, DEFAULT_PRINT_ACCENT, type PrintSettings } from '@/lib/invoices'
 import type { SettingsPayload, SettingsTab } from '@/lib/settings'
+import { roleLabels } from '@/lib/auth'
+import { toastResult } from '@/lib/notify'
 import { cn } from '@/lib/cn'
 
 const tabs: { id: SettingsTab; label: string }[] = [
@@ -27,13 +29,6 @@ const tabs: { id: SettingsTab; label: string }[] = [
   { id: 'print', label: '🎨 Personnalisation impression' },
   { id: 'account', label: '🔐 Mon compte' },
 ]
-
-const roleLabels: Record<string, string> = {
-  SUPER_ADMIN: 'Super administrateur',
-  TENANT_SUPERADMIN: 'Directeur',
-  ADMIN: 'Administrateur',
-  USER: 'Opérateur',
-}
 
 type SettingsWorkspaceProps = {
   tab: SettingsTab
@@ -102,8 +97,6 @@ function ProfileForm({
   onCompanyName: (name: string) => void
 }) {
   const router = useRouter()
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(company.logoPath ?? null)
 
@@ -113,8 +106,6 @@ function ProfileForm({
     const data = new FormData(form)
     const logo = data.get('logo')
     setLoading(true)
-    setError(null)
-    setStatus(null)
     const result = await updateCompanyProfile(
       {
         name: String(data.get('name') ?? ''),
@@ -130,12 +121,8 @@ function ProfileForm({
       logo instanceof File && logo.size > 0 ? logo : null,
     )
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Profil entreprise enregistré.')) return
     onCompanyName(String(data.get('name') ?? ''))
-    setStatus('Profil entreprise enregistré.')
     router.refresh()
   }
 
@@ -143,12 +130,8 @@ function ProfileForm({
     setLoading(true)
     const result = await removeCompanyLogo()
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Logo retiré.')) return
     setPreview(null)
-    setStatus('Logo retiré.')
   }
 
   return (
@@ -194,8 +177,6 @@ function ProfileForm({
         </div>
         <div className="lg:col-span-2 flex items-center gap-3">
           <Button type="submit" isLoading={loading}>Enregistrer le profil</Button>
-          {error ? <Caption color="danger">*{error}</Caption> : null}
-          {status ? <Caption className="text-emerald-700">{status}</Caption> : null}
         </div>
       </form>
     </Card>
@@ -203,16 +184,12 @@ function ProfileForm({
 }
 
 function FiscalForm({ company }: { company: SettingsPayload['company'] }) {
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     setLoading(true)
-    setError(null)
-    setStatus(null)
     const result = await updateFinancialSettings({
       nif: String(data.get('nif') ?? ''),
       rccm: String(data.get('rccm') ?? ''),
@@ -221,11 +198,7 @@ function FiscalForm({ company }: { company: SettingsPayload['company'] }) {
       bankAccountName: String(data.get('bankAccountName') ?? ''),
     })
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setStatus('Coordonnées bancaires enregistrées. Elles apparaîtront sur les factures.')
+    toastResult(result, 'Coordonnées bancaires enregistrées. Elles apparaîtront sur les factures.')
   }
 
   return (
@@ -240,8 +213,6 @@ function FiscalForm({ company }: { company: SettingsPayload['company'] }) {
         <InputField id="rib" name="rib" label="RIB" defaultValue={company.rib ?? ''} className="sm:col-span-2" />
         <div className="sm:col-span-2 flex items-center gap-3">
           <Button type="submit" isLoading={loading}>Enregistrer les informations fiscales</Button>
-          {error ? <Caption color="danger">*{error}</Caption> : null}
-          {status ? <Caption className="text-emerald-700">{status}</Caption> : null}
         </div>
       </form>
     </Card>
@@ -255,8 +226,6 @@ function PrintForm({
   company: SettingsPayload['company']
   print: PrintSettings
 }) {
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [legalMentions, setLegalMentions] = useState(company.legalMentions ?? '')
   const [footerText, setFooterText] = useState(print.footerText)
@@ -286,8 +255,6 @@ function PrintForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
-    setError(null)
-    setStatus(null)
     const result = await updatePrintSettings({
       legalMentions,
       footerText,
@@ -297,11 +264,7 @@ function PrintForm({
       ...flags,
     })
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setStatus('Préférences d’impression enregistrées.')
+    toastResult(result, 'Préférences d’impression enregistrées.')
   }
 
   return (
@@ -378,8 +341,6 @@ function PrintForm({
           </div>
           <div className="flex items-center gap-3">
             <Button type="submit" isLoading={loading}>Enregistrer l’impression</Button>
-            {error ? <Caption color="danger">*{error}</Caption> : null}
-            {status ? <Caption className="text-emerald-700">{status}</Caption> : null}
           </div>
         </form>
       </Card>
@@ -417,10 +378,6 @@ function AccountForm({
   account: SettingsPayload['account']
   onProfile: (name: string, pseudo: string) => void
 }) {
-  const [profileStatus, setProfileStatus] = useState<string | null>(null)
-  const [passwordStatus, setPasswordStatus] = useState<string | null>(null)
-  const [profileError, setProfileError] = useState<string | null>(null)
-  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [loadingProfile, setLoadingProfile] = useState(false)
   const [loadingPassword, setLoadingPassword] = useState(false)
 
@@ -428,19 +385,13 @@ function AccountForm({
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     setLoadingProfile(true)
-    setProfileError(null)
-    setProfileStatus(null)
     const result = await updateAccountProfile({
       name: String(data.get('name') ?? ''),
       pseudo: String(data.get('pseudo') ?? ''),
     })
     setLoadingProfile(false)
-    if (!result.ok) {
-      setProfileError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Profil mis à jour.')) return
     onProfile(result.name ?? '', result.pseudo ?? '')
-    setProfileStatus('Profil mis à jour.')
   }
 
   async function handlePassword(event: FormEvent<HTMLFormElement>) {
@@ -448,34 +399,28 @@ function AccountForm({
     const form = event.currentTarget
     const data = new FormData(form)
     setLoadingPassword(true)
-    setPasswordError(null)
-    setPasswordStatus(null)
     const result = await updatePassword({
       currentPassword: String(data.get('currentPassword') ?? ''),
       nextPassword: String(data.get('nextPassword') ?? ''),
       confirmPassword: String(data.get('confirmPassword') ?? ''),
     })
     setLoadingPassword(false)
-    if (!result.ok) {
-      setPasswordError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Mot de passe modifié.')) return
     form.reset()
-    setPasswordStatus('Mot de passe modifié.')
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-5">
         <Text weight="bold">Profil connecté</Text>
-        <Caption className="mt-1 block">{roleLabels[account.role] ?? account.role}</Caption>
+        <Caption className="mt-1 block">
+          {account.role in roleLabels ? roleLabels[account.role as keyof typeof roleLabels] : account.role}
+        </Caption>
         <form className="mt-4 flex flex-col gap-3" onSubmit={handleProfile}>
           <InputField id="account-name" name="name" label="Nom" defaultValue={account.name} required />
           <InputField id="account-pseudo" name="pseudo" label="Pseudo" defaultValue={account.pseudo} required />
           <div className="flex items-center gap-3">
             <Button type="submit" isLoading={loadingProfile}>Enregistrer</Button>
-            {profileError ? <Caption color="danger">*{profileError}</Caption> : null}
-            {profileStatus ? <Caption className="text-emerald-700">{profileStatus}</Caption> : null}
           </div>
         </form>
       </Card>
@@ -488,8 +433,6 @@ function AccountForm({
           <InputField id="confirmPassword" name="confirmPassword" label="Confirmation" type="password" required minLength={8} />
           <div className="flex items-center gap-3">
             <Button type="submit" isLoading={loadingPassword}>Mettre à jour</Button>
-            {passwordError ? <Caption color="danger">*{passwordError}</Caption> : null}
-            {passwordStatus ? <Caption className="text-emerald-700">{passwordStatus}</Caption> : null}
           </div>
         </form>
       </Card>

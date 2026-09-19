@@ -17,6 +17,7 @@ import {
   type TopProduct,
 } from '@/lib/analytics'
 import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/payments'
+import { invoiceSettlement } from '@/lib/invoices'
 
 function parsePeriod(value: unknown): DashboardPeriod {
   return value === 'year' ? 'year' : 'month'
@@ -83,6 +84,7 @@ export async function getDashboardAnalytics(period: DashboardPeriod | string = '
           },
         },
         collections: { where: { isDeleted: false }, select: { amount: true } },
+        creditNotes: { select: { amount: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -120,7 +122,8 @@ export async function getDashboardAnalytics(period: DashboardPeriod | string = '
   const remaining = invoices.reduce((sum, item) => {
     const ttc = Number(item.estimation.totalAmount)
     const paid = item.collections.reduce((inner, col) => inner + Number(col.amount), 0)
-    return sum + Math.max(ttc - paid, 0)
+    const credited = item.creditNotes.reduce((inner, note) => inner + Number(note.amount), 0)
+    return sum + invoiceSettlement(ttc, paid, credited).remaining
   }, 0)
 
   const monthCollected = collections
@@ -133,7 +136,8 @@ export async function getDashboardAnalytics(period: DashboardPeriod | string = '
   const overdueAll: OverdueInvoice[] = invoices.flatMap((item) => {
     const totalTtc = Number(item.estimation.totalAmount)
     const paid = item.collections.reduce((sum, col) => sum + Number(col.amount), 0)
-    const remainingAmount = Math.max(totalTtc - paid, 0)
+    const credited = item.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
+    const remainingAmount = invoiceSettlement(totalTtc, paid, credited).remaining
     const due = item.dueDate
     if (!(remainingAmount > 0 && due !== null && due.getTime() < now.getTime())) return []
     return [{
@@ -170,6 +174,7 @@ export async function getDashboardAnalytics(period: DashboardPeriod | string = '
     BANK_TRANSFER: 0,
     CHECK: 0,
     MOBILE_MONEY: 0,
+    CARD: 0,
   }
   for (const row of collections) {
     if (row.paymentDate < start || row.paymentDate > end) continue

@@ -1,4 +1,4 @@
-import { CompanyBrand } from '@/components/print/company-brand'
+import { CompanyBrand, PrintGeneratedBy } from '@/components/print/company-brand'
 import { amountToLetters, formatCfa, formatFrDate, parsePrintSettings, printAccentVars } from '@/lib/invoices'
 import { paymentMethodLabels, type PaymentReceipt } from '@/lib/payments'
 import { cn } from '@/lib/cn'
@@ -104,6 +104,7 @@ export function PaymentReceiptTemplate({ receipt, className }: PaymentReceiptTem
       <footer className="mt-6 space-y-1 text-[10px] text-foreground-muted">
         {settings.showLegalMentions && receipt.companyLegalMentions ? <p>{receipt.companyLegalMentions}</p> : null}
         {footerText ? <p>{footerText}</p> : null}
+        <PrintGeneratedBy />
       </footer>
     </article>
   )

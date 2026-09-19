@@ -9,11 +9,24 @@ import { Caption, Heading, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
 import { InvoicePrintTemplate } from '@/components/invoices/invoice-print-template'
 import { PaymentDialog } from '@/components/payments/payment-dialog'
+import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-note-modal'
 import {
+  cancelInvoice,
   convertEstimationToInvoice,
   duplicateDocument,
+  reviewInvoiceCancellation,
   updateEstimationStatus,
 } from '@/app/dashboard/invoices/actions'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { toastResult } from '@/lib/notify'
+import { toast } from 'sonner'
+import { useSession } from 'next-auth/react'
+import type { CreditNoteHistoryItem } from '@/lib/credit-notes'
+import {
+  CancellationRequestBadge,
+  CancellationRequestModal,
+} from '@/components/invoices/cancellation-request-modal'
 import {
   formatCfa,
   formatFrDate,
@@ -58,6 +71,10 @@ type InvoiceDetailProps = {
   paidAmount: number
   remaining: number
   payments: PaymentEntry[]
+  creditNotes?: CreditNoteHistoryItem[]
+  creditNoteCount?: number
+  cancelReason?: string | null
+  cancelRequestedAt?: string | null
   createdAt: string
   issueDate?: string
   validityDays?: number
@@ -66,15 +83,23 @@ type InvoiceDetailProps = {
 
 export function InvoiceDetail(props: InvoiceDetailProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isManager = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
   const [payOpen, setPayOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [creditOpen, setCreditOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
   const progress = props.totals.ttc > 0 ? Math.min(100, Math.round((props.paidAmount / props.totals.ttc) * 100)) : 0
+  const { runRestricted, modal } = useRestrictedAction()
+  const { confirm, dialog } = useConfirmDialog()
+  const creditNotes = props.creditNotes ?? []
+  const pendingCancel = props.status === 'PENDING_CANCELLATION'
 
   async function handleDuplicate() {
     const result = await duplicateDocument(props.estimationPublicId)
-    if (result.ok && result.publicId) {
-      router.push(`/dashboard/invoices/${result.publicId}`)
+    if (toastResult(result, 'Document dupliqué.')) {
+      if (result.publicId) router.push(`/dashboard/invoices/${result.publicId}`)
       router.refresh()
     }
   }
@@ -85,10 +110,36 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
       status,
     })
     if (!result.ok) {
-      setError(result.error)
+      toast.error(result.error)
       return
     }
+    if (status === 'SENT') toast.success('Devis marqué comme envoyé.')
+    else if (status === 'ACCEPTED') toast.success('Devis accepté.')
+    else toast.error('Devis refusé.')
     router.refresh()
+  }
+
+  async function handleReview(approved: boolean) {
+    if (!props.invoicePublicId) return
+    const confirmed = await confirm({
+      title: approved ? 'Approuver l’annulation' : 'Rejeter la demande',
+      description: approved
+        ? `Approuver l’annulation de ${props.code} ? Le stock sera réintégré.`
+        : `Rejeter la demande d’annulation de ${props.code} ? La facture reprendra son statut d’origine.`,
+      confirmLabel: approved ? 'Approuver' : 'Rejeter',
+      variant: approved ? 'solid' : 'danger',
+    })
+    if (!confirmed) return
+    setReviewing(true)
+    const result = await reviewInvoiceCancellation(props.invoicePublicId, approved)
+    setReviewing(false)
+    if (result.ok) {
+      if (approved) toast.success('Annulation approuvée. Le stock a été réintégré.')
+      else toast.error('Demande d’annulation rejetée.')
+      router.refresh()
+    } else {
+      toast.error(result.error)
+    }
   }
 
   return (
@@ -97,9 +148,20 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
         <div>
           <Caption className="uppercase tracking-wide">{props.kind === 'INVOICE' ? 'Facture' : 'Devis'}</Caption>
           <Heading as="h2" size="xl">{props.code}</Heading>
-          <span className={cn('mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[props.status])}>
-            {statusLabels[props.status]}
-          </span>
+          {props.status === 'PENDING_CANCELLATION' ? (
+            <span className="ml-2">
+              <CancellationRequestBadge reason={props.cancelReason} />
+            </span>
+          ) : (
+            <span className={cn('mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[props.status])}>
+              {statusLabels[props.status]}
+            </span>
+          )}
+          {creditNotes.length > 0 ? (
+            <span className="ml-2">
+              <CreditNoteBadge count={creditNotes.length} href="#avoirs" />
+            </span>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/dashboard/invoices/${props.estimationPublicId}/print`} target="_blank">
@@ -120,14 +182,59 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
           {props.kind === 'ESTIMATION' && props.status !== 'INVOICED' && props.status !== 'CANCELED' && props.status !== 'REJECTED' ? (
             <Button onClick={() => setConvertOpen(true)}>Convertir</Button>
           ) : null}
-          {props.invoicePublicId && props.status !== 'PAID' && props.status !== 'CANCELED' ? (
+          {props.invoicePublicId && props.status !== 'PAID' && props.status !== 'CANCELED' && !pendingCancel ? (
             <Button variant="secondary" onClick={() => setPayOpen(true)}>Enregistrer un paiement</Button>
+          ) : null}
+          {props.invoicePublicId && props.status !== 'CANCELED' && !pendingCancel ? (
+            <Button variant="secondary" onClick={() => setCreditOpen(true)}>
+              Créer un Avoir / Remboursement
+            </Button>
+          ) : null}
+          {!isManager && props.invoicePublicId && props.status !== 'CANCELED' && !pendingCancel ? (
+            <Button variant="danger" onClick={() => setCancelOpen(true)}>
+              Demander l’annulation
+            </Button>
+          ) : null}
+          {isManager && props.invoicePublicId && pendingCancel ? (
+            <>
+              <Button isLoading={reviewing} onClick={() => void handleReview(true)}>
+                Approuver l’annulation
+              </Button>
+              <Button variant="outline" disabled={reviewing} onClick={() => void handleReview(false)}>
+                Rejeter la demande
+              </Button>
+            </>
+          ) : null}
+          {isManager && props.invoicePublicId && props.status !== 'CANCELED' && !pendingCancel ? (
+            <Button
+              variant="danger"
+              onClick={() =>
+                void runRestricted({
+                  title: 'Annuler la facture',
+                  description: `Confirmer l’annulation de ${props.code}. Les règlements liés seront annulés et le stock réintégré.`,
+                  requireReason: true,
+                  successMessage: 'Facture annulée.',
+                  run: async (proof) => {
+                    const result = await cancelInvoice(props.invoicePublicId as string, proof)
+                    if (result.ok) router.refresh()
+                    return result
+                  },
+                })
+              }
+            >
+              Annuler
+            </Button>
           ) : null}
           <Button variant="outline" onClick={handleDuplicate}>Dupliquer</Button>
         </div>
       </div>
 
-      {error ? <Caption color="danger">*{error}</Caption> : null}
+      {pendingCancel && props.cancelReason ? (
+        <Card className="border border-red-200 bg-red-50 p-5">
+          <Text weight="bold" className="text-red-800">Demande d’annulation en attente</Text>
+          <Caption className="mt-1 block text-red-700">Motif : {props.cancelReason}</Caption>
+        </Card>
+      ) : null}
 
       {props.invoicePublicId ? (
         <Card className="p-5">
@@ -156,6 +263,42 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
               ))
             )}
           </ol>
+        </Card>
+      ) : null}
+
+      {props.invoicePublicId ? (
+        <Card className="p-5" id="avoirs">
+          <Text weight="bold">Historique des avoirs</Text>
+          {creditNotes.length === 0 ? (
+            <Text variant="muted" size="sm" className="mt-3">
+              Aucun avoir émis sur cette facture.
+            </Text>
+          ) : (
+            <ol className="mt-4 space-y-2">
+              {creditNotes.map((note) => (
+                <li key={note.publicId} className="flex items-start justify-between border-b border-subtle-border pb-2">
+                  <div>
+                    <Text size="sm" weight="bold">
+                      {note.code} · {formatCfa(note.amount)}
+                    </Text>
+                    <Caption className="block">
+                      {note.reason}
+                      {note.restock ? ' · Stock réintégré' : ''}
+                    </Caption>
+                    <Caption className="block">Émis par {note.cashierName}</Caption>
+                    <Link
+                      href={`/dashboard/invoices/credit-notes/${note.publicId}/print?format=ticket`}
+                      target="_blank"
+                      className="text-sm font-bold text-cobalt hover:underline"
+                    >
+                      Imprimer le reçu d’avoir
+                    </Link>
+                  </div>
+                  <Caption>{new Date(note.createdAt).toLocaleDateString('fr-FR')}</Caption>
+                </li>
+              ))}
+            </ol>
+          )}
         </Card>
       ) : null}
 
@@ -191,10 +334,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
                 depositType: type === 'none' ? null : type,
                 depositValue: Number(form.get('depositValue') || 0),
               })
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
+              if (!toastResult(result, 'Facture créée.')) return
               setConvertOpen(false)
               router.refresh()
             }}
@@ -226,6 +366,34 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
           }}
         />
       ) : null}
+      {creditOpen && props.invoicePublicId ? (
+        <CreditNoteModal
+          open
+          invoicePublicId={props.invoicePublicId}
+          invoiceCode={props.code}
+          maxAmount={props.paidAmount}
+          onClose={() => setCreditOpen(false)}
+          onDone={(publicId) => {
+            setCreditOpen(false)
+            router.refresh()
+            window.open(`/dashboard/invoices/credit-notes/${publicId}/print?format=ticket`, '_blank')
+          }}
+        />
+      ) : null}
+      {cancelOpen && props.invoicePublicId ? (
+        <CancellationRequestModal
+          open
+          invoicePublicId={props.invoicePublicId}
+          invoiceCode={props.code}
+          onClose={() => setCancelOpen(false)}
+          onDone={() => {
+            setCancelOpen(false)
+            router.refresh()
+          }}
+        />
+      ) : null}
+      {modal}
+      {dialog}
     </div>
   )
 }

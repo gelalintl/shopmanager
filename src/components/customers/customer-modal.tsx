@@ -2,10 +2,11 @@
 
 import { FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Caption, Heading, Text } from '@/components/ui/typography'
+import { Heading, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
 import { createCustomer, updateCustomer } from '@/app/dashboard/customers/actions'
 import { cn } from '@/lib/cn'
+import { toastResult } from '@/lib/notify'
 import type { CatalogCustomer } from '@/lib/invoices'
 import type { CustomerKindForm, CustomerListItem } from '@/lib/customers'
 
@@ -36,7 +37,6 @@ function CustomerModalForm({
 }: Omit<CustomerModalProps, 'open'>) {
   const editing = Boolean(customer)
   const [kind, setKind] = useState<CustomerKindForm>(customer?.kind ?? 'INDIVIDUAL')
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +53,6 @@ function CustomerModalForm({
     }
 
     setLoading(true)
-    setError(null)
 
     const result = editing && customer
       ? await updateCustomer(customer.publicId, payload)
@@ -61,10 +60,7 @@ function CustomerModalForm({
 
     setLoading(false)
 
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    if (!toastResult(result, editing ? 'Client mis à jour.' : 'Client créé.')) return
 
     if (!editing && result.customer) {
       onCreated?.(result.customer)
@@ -93,12 +89,6 @@ function CustomerModalForm({
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col overflow-y-auto px-6 pb-6"
         >
-          {error ? (
-            <Caption color="danger" className="mt-3 italic">
-              *{error}
-            </Caption>
-          ) : null}
-
           <p className="mt-2.5 mb-1 font-sans text-sm font-bold text-foreground">Type</p>
           <div className="flex gap-2" role="group" aria-label="Type de client">
             {([

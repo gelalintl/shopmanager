@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
+import { requirePageRole } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import { ReportsWorkspace } from '@/components/reports/reports-workspace'
 import {
   getOutstandingReport,
@@ -29,6 +31,7 @@ export default async function ReportsPage({
 }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  await requirePageRole(MANAGER_ROLES)
 
   const params = await searchParams
   const preset = parseReportPreset(params.preset)

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import {
   EstimationStatus,
   InvoiceStatus,
+  MovementType,
   PaymentMethod,
   Prisma,
 } from '@prisma/client'
@@ -15,6 +16,7 @@ import {
   addDays,
   computeTotals,
   formatDocumentCode,
+  invoiceSettlement,
   normalizeEstimationStatus,
   parseLocalDate,
   resolveInvoiceStatus,
@@ -24,7 +26,11 @@ import {
   type DocumentListItem,
   type InvoiceTab,
 } from '@/lib/invoices'
+import { issueCreditNote, type CreditNoteInput } from '@/lib/credit-notes'
 import { paginationMeta, parseLimit, parsePage } from '@/lib/pagination'
+import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
+import { MANAGER_ROLES, roleAllowed } from '@/lib/auth'
+import { invoiceStatusFromPaid } from '@/lib/payments'
 
 const PATH = '/dashboard/invoices'
 type ActionResult =
@@ -36,6 +42,86 @@ function estimationStatus(
   status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'CANCELED',
 ): EstimationStatus {
   return status as EstimationStatus
+}
+
+async function restockInvoiceItems(
+  tx: Prisma.TransactionClient,
+  invoice: {
+    companyId: number
+    customerId: number
+    estimation: {
+      items: Array<{ id: bigint; productId: number; quantity: number; unitPrice: bigint }>
+    }
+  },
+  actorId: number,
+) {
+  for (const item of invoice.estimation.items) {
+    if (item.quantity <= 0) continue
+    const movements = await tx.stockMovement.findMany({
+      where: { estimationItemId: item.id, companyId: invoice.companyId, isDeleted: false },
+      select: { type: true, quantity: true },
+    })
+    const netOut = movements.reduce(
+      (sum, movement) =>
+        movement.type === MovementType.OUT ? sum + movement.quantity : sum - movement.quantity,
+      0,
+    )
+    if (netOut <= 0) continue
+    await tx.stockMovement.create({
+      data: {
+        companyId: invoice.companyId,
+        type: MovementType.IN,
+        quantity: netOut,
+        sellingPrice: item.unitPrice,
+        productId: item.productId,
+        customerId: invoice.customerId,
+        estimationItemId: item.id,
+        createdById: actorId,
+      },
+    })
+  }
+}
+
+async function finalizeInvoiceCancellation(
+  tx: Prisma.TransactionClient,
+  invoice: {
+    id: bigint
+    companyId: number
+    customerId: number
+    cancelReason: string | null
+    estimation: {
+      id: bigint
+      items: Array<{ id: bigint; productId: number; quantity: number; unitPrice: bigint }>
+    }
+  },
+  actorId: number,
+  reason: string | null,
+) {
+  const now = new Date()
+  await tx.invoice.update({
+    where: { id: invoice.id },
+    data: {
+      status: InvoiceStatus.CANCELED,
+      cancelledById: actorId,
+      cancelledAt: now,
+      cancelReason: reason ?? invoice.cancelReason,
+    },
+  })
+  await tx.estimation.update({
+    where: { id: invoice.estimation.id },
+    data: { status: estimationStatus('CANCELED') },
+  })
+  await tx.collection.updateMany({
+    where: { invoiceId: invoice.id, companyId: invoice.companyId, isDeleted: false },
+    data: {
+      isDeleted: true,
+      deletedAt: now,
+      cancelledById: actorId,
+      cancelledAt: now,
+      cancelReason: reason || invoice.cancelReason || 'Annulation de la facture',
+    },
+  })
+  await restockInvoiceItems(tx, invoice, actorId)
 }
 
 type DocumentExtras = {
@@ -94,7 +180,7 @@ function parseLines(lines: LinePayload[]) {
     .filter((line) => line.designation && line.quantity > 0)
 }
 
-const TABS: InvoiceTab[] = ['all', 'devis', 'factures', 'pending', 'paid', 'drafts']
+const TABS: InvoiceTab[] = ['all', 'devis', 'factures', 'pending', 'paid', 'drafts', 'cancellations']
 
 function parseTab(value: unknown): InvoiceTab {
   const tab = String(value ?? 'all')
@@ -105,7 +191,7 @@ function parseKind(value: unknown, tab: InvoiceTab): DocumentKind | 'all' {
   const kind = String(value ?? '').toUpperCase()
   if (kind === 'ESTIMATION' || kind === 'INVOICE') return kind
   if (tab === 'devis' || tab === 'drafts') return 'ESTIMATION'
-  if (tab === 'factures' || tab === 'paid') return 'INVOICE'
+  if (tab === 'factures' || tab === 'paid' || tab === 'cancellations') return 'INVOICE'
   return 'all'
 }
 
@@ -140,6 +226,7 @@ export async function getDocuments(
   billed: number
   pendingQuotes: number
   outstanding: number
+  cancellationCount: number
 }> {
   const empty = {
     documents: [],
@@ -151,6 +238,7 @@ export async function getDocuments(
     billed: 0,
     pendingQuotes: 0,
     outstanding: 0,
+    cancellationCount: 0,
   }
 
   const ctx = await getTenantContext()
@@ -180,6 +268,7 @@ export async function getDocuments(
 
   const invoiceStatusFilter = (): Prisma.InvoiceWhereInput => {
     if (tab === 'paid') return { status: InvoiceStatus.PAID }
+    if (tab === 'cancellations') return { status: InvoiceStatus.PENDING_CANCELLATION }
     if (tab === 'pending') {
       return { status: { in: [InvoiceStatus.UNPAID, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] } }
     }
@@ -212,7 +301,7 @@ export async function getDocuments(
   const skip = mixed ? undefined : listMeta.skip
   const take = mixed ? undefined : listMeta.take
 
-  const [estimationRows, invoiceRows, statInvoices, statEstimations, customers] = await Promise.all([
+  const [estimationRows, invoiceRows, statInvoices, statEstimations, customers, cancellationCount] = await Promise.all([
     includeEstimations
       ? prisma.estimation.findMany({
           where: estimationWhere,
@@ -229,6 +318,7 @@ export async function getDocuments(
             customer: true,
             estimation: true,
             collections: { where: { isDeleted: false } },
+            creditNotes: { select: { amount: true } },
           },
           orderBy: { createdAt: 'desc' },
           skip,
@@ -240,6 +330,7 @@ export async function getDocuments(
       include: {
         estimation: { select: { totalAmount: true } },
         collections: { where: { isDeleted: false }, select: { amount: true } },
+        creditNotes: { select: { amount: true } },
       },
     }),
     prisma.estimation.findMany({
@@ -250,6 +341,9 @@ export async function getDocuments(
       where: { companyId, isDeleted: false },
       select: { publicId: true, name: true },
       orderBy: { name: 'asc' },
+    }),
+    prisma.invoice.count({
+      where: { companyId, status: InvoiceStatus.PENDING_CANCELLATION },
     }),
   ])
 
@@ -266,15 +360,20 @@ export async function getDocuments(
       totalTtc: Number(item.totalAmount),
       paidAmount: 0,
       remaining: Number(item.totalAmount),
+      creditNoteCount: 0,
+      creditNoteTotal: 0,
+      cancelReason: null,
+      cancelRequestedAt: null,
       createdAt: item.createdAt.toISOString(),
       dueDate: item.dueDate?.toISOString() ?? null,
     }
   })
 
   const invoiceDocs: DocumentListItem[] = invoiceRows.map((item) => {
-    const paidAmount = item.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+    const collected = item.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+    const credited = item.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
     const totalTtc = Number(item.estimation.totalAmount)
-    const remaining = Math.max(totalTtc - paidAmount, 0)
+    const settlement = invoiceSettlement(totalTtc, collected, credited)
     return {
       publicId: item.publicId,
       estimationPublicId: item.estimation.publicId,
@@ -282,10 +381,14 @@ export async function getDocuments(
       kind: 'INVOICE',
       code: item.code,
       customerName: item.customer.name,
-      status: resolveInvoiceStatus(item.status, remaining, item.dueDate),
+      status: resolveInvoiceStatus(item.status, settlement.remaining, item.dueDate),
       totalTtc,
-      paidAmount,
-      remaining,
+      paidAmount: settlement.netPaid,
+      remaining: settlement.remaining,
+      creditNoteCount: item.creditNotes.length,
+      creditNoteTotal: settlement.credited,
+      cancelReason: item.cancelReason,
+      cancelRequestedAt: item.cancelRequestedAt?.toISOString() ?? null,
       createdAt: item.createdAt.toISOString(),
       dueDate: item.dueDate?.toISOString() ?? null,
     }
@@ -298,8 +401,9 @@ export async function getDocuments(
 
   const billed = statInvoices.reduce((sum, item) => sum + Number(item.estimation.totalAmount), 0)
   const outstanding = statInvoices.reduce((sum, item) => {
-    const paid = item.collections.reduce((inner, col) => inner + Number(col.amount), 0)
-    return sum + Math.max(Number(item.estimation.totalAmount) - paid, 0)
+    const collected = item.collections.reduce((inner, col) => inner + Number(col.amount), 0)
+    const credited = item.creditNotes.reduce((inner, note) => inner + Number(note.amount), 0)
+    return sum + invoiceSettlement(Number(item.estimation.totalAmount), collected, credited).remaining
   }, 0)
   const pendingQuotes = statEstimations.filter((item) => {
     const status = normalizeEstimationStatus(item.status)
@@ -316,6 +420,7 @@ export async function getDocuments(
     billed,
     pendingQuotes,
     outstanding,
+    cancellationCount,
   }
 }
 
@@ -662,5 +767,182 @@ export async function updateEstimationStatus(input: {
   } catch (error) {
     console.error('Erreur statut devis:', error)
     return { ok: false, error: 'La mise à jour du statut a échoué.' }
+  }
+}
+
+export async function createCreditNote(data: CreditNoteInput) {
+  const result = await issueCreditNote(data)
+  if (result.ok) {
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${result.estimationPublicId}`)
+    revalidatePath('/dashboard/payments')
+    revalidatePath('/dashboard/pos')
+    revalidatePath('/dashboard/products')
+    revalidatePath('/dashboard')
+  }
+  return result
+}
+
+export async function requestInvoiceCancellation(
+  invoiceId: string,
+  reason: string,
+): Promise<ActionResult> {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return { ok: false, error: ctx.error }
+
+  const motif = String(reason ?? '').trim()
+  if (!motif) return { ok: false, error: 'Le motif d’annulation est obligatoire.' }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      publicId: invoiceId,
+      companyId: ctx.user.companyId,
+    },
+    include: { estimation: { select: { publicId: true } } },
+  })
+  if (!invoice || !assertSameCompany(ctx.user.companyId, invoice.companyId)) {
+    return { ok: false, error: 'Facture introuvable.' }
+  }
+  if (invoice.status === InvoiceStatus.CANCELED) {
+    return { ok: false, error: 'Cette facture est déjà annulée.' }
+  }
+  if (invoice.status === InvoiceStatus.PENDING_CANCELLATION) {
+    return { ok: false, error: 'Une demande d’annulation est déjà en attente.' }
+  }
+
+  try {
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: InvoiceStatus.PENDING_CANCELLATION,
+        cancelReason: motif,
+        cancelRequestedById: ctx.user.id,
+        cancelRequestedAt: new Date(),
+      },
+    })
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${invoice.estimation.publicId}`)
+    revalidatePath('/dashboard/payments')
+    return { ok: true, publicId: invoice.publicId }
+  } catch (error) {
+    console.error('Erreur demande d’annulation:', error)
+    return { ok: false, error: 'La demande d’annulation a échoué.' }
+  }
+}
+
+export async function reviewInvoiceCancellation(
+  invoiceId: string,
+  approved: boolean,
+): Promise<ActionResult> {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return { ok: false, error: ctx.error }
+  if (!roleAllowed(ctx.user.role, MANAGER_ROLES)) {
+    return { ok: false, error: 'Seul un administrateur peut valider une demande d’annulation.' }
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      publicId: invoiceId,
+      companyId: ctx.user.companyId,
+    },
+    include: {
+      estimation: {
+        select: {
+          id: true,
+          publicId: true,
+          totalAmount: true,
+          items: { select: { id: true, productId: true, quantity: true, unitPrice: true } },
+        },
+      },
+      collections: { where: { isDeleted: false }, select: { amount: true } },
+      creditNotes: { select: { amount: true } },
+    },
+  })
+  if (!invoice || !assertSameCompany(ctx.user.companyId, invoice.companyId)) {
+    return { ok: false, error: 'Facture introuvable.' }
+  }
+  if (invoice.status !== InvoiceStatus.PENDING_CANCELLATION) {
+    return { ok: false, error: 'Cette facture n’a pas de demande d’annulation en attente.' }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (approved) {
+        await finalizeInvoiceCancellation(tx, invoice, ctx.user.id, invoice.cancelReason)
+        return
+      }
+
+      const collected = invoice.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+      const credited = invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
+      const restored = invoiceStatusFromPaid(
+        invoiceSettlement(Number(invoice.estimation.totalAmount), collected, credited).netPaid,
+        Number(invoice.estimation.totalAmount),
+      )
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: restored,
+          cancelReason: null,
+          cancelRequestedById: null,
+          cancelRequestedAt: null,
+        },
+      })
+    })
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${invoice.estimation.publicId}`)
+    revalidatePath('/dashboard/payments')
+    revalidatePath('/dashboard/products')
+    revalidatePath('/dashboard')
+    return { ok: true, publicId: invoice.publicId }
+  } catch (error) {
+    console.error('Erreur revue d’annulation:', error)
+    return { ok: false, error: 'Le traitement de la demande d’annulation a échoué.' }
+  }
+}
+
+export async function cancelInvoice(
+  invoicePublicId: string,
+  adminProof?: AdminProof | null,
+): Promise<ActionResult> {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return { ok: false, error: ctx.error }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      publicId: invoicePublicId,
+      companyId: ctx.user.companyId,
+    },
+    include: {
+      estimation: {
+        select: {
+          id: true,
+          publicId: true,
+          items: { select: { id: true, productId: true, quantity: true, unitPrice: true } },
+        },
+      },
+    },
+  })
+  if (!invoice || !assertSameCompany(ctx.user.companyId, invoice.companyId)) {
+    return { ok: false, error: 'Facture introuvable.' }
+  }
+
+  const authz = await authorizeMutation(MANAGER_ROLES, adminProof, invoice.companyId)
+  if (!authz.ok) return authz
+  if (invoice.status === InvoiceStatus.CANCELED) {
+    return { ok: false, error: 'Cette facture est déjà annulée.' }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await finalizeInvoiceCancellation(tx, invoice, authz.actorId, authz.reason)
+    })
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${invoice.estimation.publicId}`)
+    revalidatePath('/dashboard/payments')
+    revalidatePath('/dashboard/products')
+    return { ok: true, publicId: invoice.publicId }
+  } catch (error) {
+    console.error('Erreur annulation facture:', error)
+    return { ok: false, error: "L'annulation de la facture a échoué." }
   }
 }

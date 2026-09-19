@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: 'SM | Devis & Factures',
 }
 
-const TABS: InvoiceTab[] = ['all', 'devis', 'factures', 'pending', 'paid', 'drafts']
+const TABS: InvoiceTab[] = ['all', 'devis', 'factures', 'pending', 'paid', 'drafts', 'cancellations']
 
 export default async function InvoicesPage({
   searchParams,
@@ -65,6 +65,7 @@ export default async function InvoicesPage({
           currentPage={result.currentPage}
           limit={limit}
           initialTab={initialTab}
+          cancellationCount={result.cancellationCount}
           initialFilters={{
             startDate: params.startDate ?? '',
             endDate: params.endDate ?? '',

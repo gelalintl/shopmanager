@@ -2,44 +2,16 @@
 
 import { revalidatePath } from 'next/cache'
 import { MovementType } from '@prisma/client'
-import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { getTenantContext } from '@/lib/tenant'
+import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import { makeProductCode, getStockStatus, type ProductListItem, type StockFilter } from '@/lib/products'
 import { paginationMeta, parseLimit, parsePage, type Paginated } from '@/lib/pagination'
 
 const PRODUCTS_PATH = '/dashboard/products'
 
 type ActionResult = { ok: true } | { ok: false; error: string }
-
-type TenantContext =
-  | { ok: true; user: { id: number; companyId: number } }
-  | { ok: false; error: string }
-
-async function getTenantContext(): Promise<TenantContext> {
-  const session = await auth()
-  const companyId = session?.user?.companyId
-  const pseudo = session?.user?.pseudo
-  const publicId = session?.user?.id
-
-  if (!companyId) {
-    return { ok: false, error: 'Session invalide.' }
-  }
-
-  const user = await prisma.user.findFirst({
-    where: {
-      companyId,
-      isDeleted: false,
-      ...(publicId ? { publicId } : { pseudo: pseudo ?? '' }),
-    },
-    select: { id: true, companyId: true },
-  })
-
-  if (!user) {
-    return { ok: false, error: 'Utilisateur introuvable.' }
-  }
-
-  return { ok: true, user }
-}
 
 function parsePositiveInt(value: unknown, fallback = 0) {
   const n = typeof value === 'number' ? value : Number(String(value ?? '').replace(/\s/g, ''))
@@ -48,15 +20,9 @@ function parsePositiveInt(value: unknown, fallback = 0) {
 }
 
 export async function createProduct(formData: FormData): Promise<ActionResult> {
-  const session = await auth()
-  const companyId = session?.user?.companyId
-
-  if (!companyId) {
-    return { ok: false, error: 'Session invalide.' }
-  }
-
   const ctx = await getTenantContext()
   if (!ctx.ok) return { ok: false, error: ctx.error }
+  const companyId = ctx.user.companyId
 
   const designation = String(formData.get('designation') ?? '').trim()
   if (!designation) return { ok: false, error: 'La désignation est requise.' }
@@ -138,6 +104,7 @@ export async function updateProduct(input: {
   unitPrice: number
   purchasePrice?: number | null
   alertThreshold?: number
+  adminProof?: AdminProof | null
 }): Promise<ActionResult> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return { ok: false, error: ctx.error }
@@ -168,6 +135,14 @@ export async function updateProduct(input: {
   })
 
   if (!product) return { ok: false, error: 'Produit introuvable.' }
+  if (!assertSameCompany(ctx.user.companyId, product.companyId)) {
+    return { ok: false, error: 'Produit introuvable.' }
+  }
+
+  if (unitPrice !== Number(product.unitPrice)) {
+    const authz = await authorizeMutation(MANAGER_ROLES, input.adminProof, product.companyId)
+    if (!authz.ok) return authz
+  }
 
   const duplicate = await prisma.product.findFirst({
     where: {
@@ -212,6 +187,9 @@ export async function restockProduct(input: {
   })
 
   if (!product) return { ok: false, error: 'Produit introuvable.' }
+  if (!assertSameCompany(ctx.user.companyId, product.companyId)) {
+    return { ok: false, error: 'Produit introuvable.' }
+  }
 
   await prisma.stockMovement.create({
     data: {
@@ -228,7 +206,7 @@ export async function restockProduct(input: {
   return { ok: true }
 }
 
-export async function deleteProduct(publicId: string): Promise<ActionResult> {
+export async function deleteProduct(publicId: string, adminProof?: AdminProof | null): Promise<ActionResult> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
@@ -239,8 +217,12 @@ export async function deleteProduct(publicId: string): Promise<ActionResult> {
       isDeleted: false,
     },
   })
+  if (!product || !assertSameCompany(ctx.user.companyId, product.companyId)) {
+    return { ok: false, error: 'Produit introuvable.' }
+  }
 
-  if (!product) return { ok: false, error: 'Produit introuvable.' }
+  const authz = await authorizeMutation(MANAGER_ROLES, adminProof, product.companyId)
+  if (!authz.ok) return authz
 
   await prisma.product.update({
     where: { id: product.id },

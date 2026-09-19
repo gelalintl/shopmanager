@@ -1,0 +1,13 @@
+-- Dump DML MySQL (Laravel ShopManager) à importer vers Prisma PostgreSQL.
+--
+-- Génération conseillée :
+--   mysqldump -u USER -p --no-create-info --complete-insert --skip-triggers \
+--     --compact DBNAME customers products estimations operations invoices collections companies \
+--     > prisma/data-dump.sql
+--
+-- Tables lues : customers, products, estimations, operations, invoices, collections, companies
+-- Les INSERT peuvent être étendus (plusieurs tuples) et utiliser des backticks MySQL.
+--
+-- Collez ci-dessous les instructions INSERT. Sans INSERT, le seed crée uniquement
+-- la société ELTEK et les 3 comptes (operateur / directeur / admin).
+

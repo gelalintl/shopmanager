@@ -9,6 +9,7 @@ const colors: Record<PaymentMethod, string> = {
   BANK_TRANSFER: '#1d4ed8',
   CHECK: '#d97706',
   MOBILE_MONEY: '#4f46e5',
+  CARD: '#7c3aed',
 }
 
 type PaymentMethodsDonutProps = {

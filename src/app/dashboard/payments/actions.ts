@@ -13,8 +13,10 @@ import {
   type PaymentMethod,
   type PaymentReceipt,
 } from '@/lib/payments'
-import { parsePrintSettings } from '@/lib/invoices'
+import { invoiceSettlement, parsePrintSettings } from '@/lib/invoices'
 import { paginationMeta, parseLimit, parsePage } from '@/lib/pagination'
+import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 
 const PATH = '/dashboard/payments'
 
@@ -72,16 +74,21 @@ export async function recordPayment(input: {
       estimation: { select: { publicId: true, totalAmount: true } },
       customer: { select: { publicId: true } },
       collections: { where: activeCollections, select: { amount: true } },
+      creditNotes: { select: { amount: true } },
     },
   })
   if (!invoice) return { ok: false, error: 'Facture introuvable.' }
   if (invoice.status === InvoiceStatus.CANCELED) {
     return { ok: false, error: 'Facture annulée.' }
   }
+  if (invoice.status === InvoiceStatus.PENDING_CANCELLATION) {
+    return { ok: false, error: 'Facture en attente d’annulation. Règlement impossible.' }
+  }
 
-  const alreadyPaid = invoice.collections.reduce((sum, item) => sum + Number(item.amount), 0)
+  const collected = invoice.collections.reduce((sum, item) => sum + Number(item.amount), 0)
+  const credited = invoice.creditNotes.reduce((sum, item) => sum + Number(item.amount), 0)
   const totalTtc = Number(invoice.estimation.totalAmount)
-  const remaining = totalTtc - alreadyPaid
+  const remaining = invoiceSettlement(totalTtc, collected, credited).remaining
   if (amount > remaining) {
     return { ok: false, error: `Le reste à payer est de ${remaining} F CFA.` }
   }
@@ -102,7 +109,7 @@ export async function recordPayment(input: {
         },
       })
 
-      const paid = alreadyPaid + amount
+      const paid = invoiceSettlement(totalTtc, collected + amount, credited).netPaid
       await tx.invoice.update({
         where: { id: invoice.id },
         data: { status: invoiceStatusFromPaid(paid, totalTtc) },
@@ -119,7 +126,10 @@ export async function recordPayment(input: {
   }
 }
 
-export async function cancelPayment(collectionId: string): Promise<ActionResult> {
+export async function cancelPayment(
+  collectionId: string,
+  adminProof?: AdminProof | null,
+): Promise<ActionResult> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
@@ -134,28 +144,45 @@ export async function cancelPayment(collectionId: string): Promise<ActionResult>
         include: {
           estimation: { select: { publicId: true, totalAmount: true } },
           customer: { select: { publicId: true } },
+          creditNotes: { select: { amount: true } },
         },
       },
     },
   })
   if (!collection) return { ok: false, error: 'Règlement introuvable.' }
+  if (!assertSameCompany(ctx.user.companyId, collection.companyId)) {
+    return { ok: false, error: 'Règlement introuvable.' }
+  }
+  const authz = await authorizeMutation(MANAGER_ROLES, adminProof, collection.companyId)
+  if (!authz.ok) return authz
   if (collection.invoice.status === InvoiceStatus.CANCELED) {
     return { ok: false, error: 'Facture annulée.' }
+  }
+  if (collection.invoice.status === InvoiceStatus.PENDING_CANCELLATION) {
+    return { ok: false, error: 'Facture en attente d’annulation. Règlement impossible à modifier.' }
   }
 
   try {
     await prisma.$transaction(async (tx) => {
       await tx.collection.update({
         where: { id: collection.id },
-        data: { isDeleted: true, deletedAt: new Date() },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          cancelledById: authz.actorId,
+          cancelledAt: new Date(),
+          cancelReason: authz.reason,
+        },
       })
 
       const remainingRows = await tx.collection.findMany({
         where: { invoiceId: collection.invoiceId, isDeleted: false },
         select: { amount: true },
       })
-      const paid = remainingRows.reduce((sum, row) => sum + Number(row.amount), 0)
+      const collected = remainingRows.reduce((sum, row) => sum + Number(row.amount), 0)
+      const credited = collection.invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
       const totalTtc = Number(collection.invoice.estimation.totalAmount)
+      const paid = invoiceSettlement(totalTtc, collected, credited).netPaid
 
       await tx.invoice.update({
         where: { id: collection.invoiceId },
@@ -193,7 +220,7 @@ export async function getPaymentsJournal(
     totalPages: 1,
     currentPage: 1,
     monthTotal: 0,
-    byMethod: { CASH: 0, BANK_TRANSFER: 0, CHECK: 0, MOBILE_MONEY: 0 } as Record<PaymentMethod, number>,
+    byMethod: { CASH: 0, BANK_TRANSFER: 0, CHECK: 0, MOBILE_MONEY: 0, CARD: 0 } as Record<PaymentMethod, number>,
     outstanding: 0,
     customers: [],
   }
@@ -239,7 +266,9 @@ export async function getPaymentsJournal(
             publicId: true,
             code: true,
             customer: { select: { publicId: true, name: true } },
-            estimation: { select: { publicId: true } },
+            estimation: { select: { publicId: true, totalAmount: true } },
+            collections: { where: { isDeleted: false }, select: { amount: true } },
+            creditNotes: { select: { id: true, amount: true } },
           },
         },
       },
@@ -260,6 +289,7 @@ export async function getPaymentsJournal(
       select: {
         estimation: { select: { totalAmount: true } },
         collections: { where: activeCollections, select: { amount: true } },
+        creditNotes: { select: { amount: true } },
       },
     }),
     prisma.customer.findMany({
@@ -274,6 +304,7 @@ export async function getPaymentsJournal(
     BANK_TRANSFER: 0,
     CHECK: 0,
     MOBILE_MONEY: 0,
+    CARD: 0,
   }
   let monthTotal = 0
   for (const row of monthRows) {
@@ -284,8 +315,9 @@ export async function getPaymentsJournal(
 
   const outstanding = invoices.reduce((sum, invoice) => {
     const billed = Number(invoice.estimation.totalAmount)
-    const paid = invoice.collections.reduce((inner, col) => inner + Number(col.amount), 0)
-    return sum + Math.max(billed - paid, 0)
+    const collected = invoice.collections.reduce((inner, col) => inner + Number(col.amount), 0)
+    const credited = invoice.creditNotes.reduce((inner, note) => inner + Number(note.amount), 0)
+    return sum + invoiceSettlement(billed, collected, credited).remaining
   }, 0)
 
   const entries = rows.map((row) => ({
@@ -300,6 +332,14 @@ export async function getPaymentsJournal(
     customerPublicId: row.invoice.customer.publicId,
     customerName: row.invoice.customer.name,
     collectorName: row.collector.name || row.collector.pseudo,
+    hasCreditNotes: row.invoice.creditNotes.length > 0,
+    creditNoteCount: row.invoice.creditNotes.length,
+    creditNoteTotal: row.invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0),
+    refundableAmount: invoiceSettlement(
+      Number(row.invoice.estimation.totalAmount),
+      row.invoice.collections.reduce((sum, col) => sum + Number(col.amount), 0),
+      row.invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0),
+    ).netPaid,
   }))
 
   return {
@@ -349,6 +389,7 @@ export async function getPaymentReceipt(collectionId: string): Promise<PaymentRe
             select: { id: true, amount: true, paymentDate: true },
             orderBy: [{ paymentDate: 'asc' }, { id: 'asc' }],
           },
+          creditNotes: { select: { amount: true } },
         },
       },
     },
@@ -360,7 +401,12 @@ export async function getPaymentReceipt(collectionId: string): Promise<PaymentRe
     running += Number(row.amount)
     if (row.id === collection.id) break
   }
-  const remainingAfter = Math.max(Number(collection.invoice.estimation.totalAmount) - running, 0)
+  const credited = collection.invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
+  const remainingAfter = invoiceSettlement(
+    Number(collection.invoice.estimation.totalAmount),
+    running,
+    credited,
+  ).remaining
   const extras = parsePrintSettings(collection.company.printSettings)
 
   return {

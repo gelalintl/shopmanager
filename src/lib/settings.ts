@@ -113,6 +113,7 @@ export function toPrintCompany(company: {
     legalMentions: company.legalMentions,
     slogan: company.slogan,
     logoPath: company.logoPath ?? null,
+    logoUrl: company.logoPath ?? null,
   }
 }
 

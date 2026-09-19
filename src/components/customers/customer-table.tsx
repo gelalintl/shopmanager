@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/typography'
 import { IconEye, IconPencil, IconTrash } from '@/components/ui/icons'
 import { deleteCustomer } from '@/app/dashboard/customers/actions'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { kindLabel, type CustomerListItem } from '@/lib/customers'
 import { cn } from '@/lib/cn'
 
@@ -19,14 +20,20 @@ const iconBtn =
 
 export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const { runRestricted, modal } = useRestrictedAction()
 
-  async function handleDelete(customer: CustomerListItem) {
-    const confirmed = window.confirm(`Supprimer « ${customer.name} » ?`)
-    if (!confirmed) return
-
-    setPendingId(customer.publicId)
-    await deleteCustomer(customer.publicId)
-    setPendingId(null)
+  function handleDelete(customer: CustomerListItem) {
+    void runRestricted({
+      title: 'Supprimer le client',
+      description: `Validation gestionnaire pour supprimer « ${customer.name} ».`,
+      successMessage: 'Client supprimé.',
+      run: async (proof) => {
+        setPendingId(customer.publicId)
+        const result = await deleteCustomer(customer.publicId, proof)
+        setPendingId(null)
+        return result
+      },
+    })
   }
 
   return (
@@ -120,6 +127,7 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
           </tbody>
         </table>
       </div>
+      {modal}
     </Card>
   )
 }

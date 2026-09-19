@@ -13,16 +13,22 @@ export default async function InvoicePrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ download?: string }>
+  searchParams: Promise<{ download?: string; format?: string }>
 }) {
   const session = await auth()
   const companyId = session?.user?.companyId
   if (!companyId) redirect('/login')
 
   const { id } = await params
-  const { download } = await searchParams
+  const { download, format } = await searchParams
   const document = await loadInvoiceDocument(companyId, id)
   if (!document) notFound()
 
-  return <InvoicePrintView document={document} autoPrint={download === '1'} />
+  return (
+    <InvoicePrintView
+      document={document}
+      autoPrint={download === '1'}
+      sheet={format === 'a5' ? 'a5' : 'a4'}
+    />
+  )
 }

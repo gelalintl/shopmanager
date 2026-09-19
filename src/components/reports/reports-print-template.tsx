@@ -1,4 +1,4 @@
-import { CompanyBrand } from '@/components/print/company-brand'
+import { CompanyBrand, PrintGeneratedBy } from '@/components/print/company-brand'
 import { formatCfa, printAccentVars, type PrintCompany } from '@/lib/invoices'
 import type { ProductSaleRow, ReceivableRow, SalesReport, VatRow } from '@/lib/analytics'
 import { cn } from '@/lib/cn'
@@ -37,7 +37,7 @@ export function ReportsPrintTemplate({
         style={{ borderColor: 'var(--print-accent)' }}
       >
         <div>
-          <CompanyBrand name={company.name} logoPath={company.logoPath} />
+          <CompanyBrand name={company.name} logoPath={company.logoPath} logoUrl={company.logoUrl} />
           <div className="mt-3 space-y-0.5 text-foreground-muted">
             <p className="font-bold text-foreground">{company.name}</p>
             <p>{company.address}</p>
@@ -153,13 +153,12 @@ export function ReportsPrintTemplate({
         </p>
       </section>
 
-      {company.legalMentions ? (
-        <p className="mt-auto pt-6 text-[10px] text-foreground-muted">{company.legalMentions}</p>
-      ) : (
-        <p className="mt-auto pt-6 text-[10px] text-foreground-muted">
-          Document généré par ShopManager — {company.name}
-        </p>
-      )}
+      <footer className="mt-auto space-y-2 pt-6">
+        {company.legalMentions ? (
+          <p className="text-[10px] text-foreground-muted">{company.legalMentions}</p>
+        ) : null}
+        <PrintGeneratedBy />
+      </footer>
     </article>
   )
 }

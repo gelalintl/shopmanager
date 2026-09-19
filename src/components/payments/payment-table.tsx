@@ -2,10 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
-import { IconPrinter, IconTrash } from '@/components/ui/icons'
+import { IconPrinter, IconTrash, IconUndo } from '@/components/ui/icons'
 import { cancelPayment } from '@/app/dashboard/payments/actions'
+import { createCreditNote } from '@/app/dashboard/collections/actions'
+import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-note-modal'
+import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { formatCfa, formatFrDate } from '@/lib/invoices'
 import {
   paymentMethodClass,
@@ -22,16 +27,27 @@ type PaymentTableProps = {
 }
 
 export function PaymentTable({ entries }: PaymentTableProps) {
+  const router = useRouter()
+  const { data: session } = useSession()
+  const isManager = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [creditEntry, setCreditEntry] = useState<PaymentJournalEntry | null>(null)
+  const { runRestricted, modal } = useRestrictedAction()
 
-  async function handleCancel(entry: PaymentJournalEntry) {
-    const confirmed = window.confirm(
-      `Annuler le règlement de ${formatCfa(entry.amount)} sur ${entry.invoiceCode} ?`,
-    )
-    if (!confirmed) return
-    setPendingId(entry.publicId)
-    await cancelPayment(entry.publicId)
-    setPendingId(null)
+  function handleCancel(entry: PaymentJournalEntry) {
+    void runRestricted({
+      title: 'Annuler le règlement',
+      description: `Validation gestionnaire pour annuler ${formatCfa(entry.amount)} sur ${entry.invoiceCode}.`,
+      requireReason: true,
+      successMessage: 'Règlement annulé.',
+      run: async (proof) => {
+        setPendingId(entry.publicId)
+        const result = await cancelPayment(entry.publicId, proof)
+        setPendingId(null)
+        if (result.ok) router.refresh()
+        return result
+      },
+    })
   }
 
   return (
@@ -75,6 +91,14 @@ export function PaymentTable({ entries }: PaymentTableProps) {
                     >
                       {entry.invoiceCode}
                     </Link>
+                    {entry.hasCreditNotes ? (
+                      <div className="mt-1">
+                        <CreditNoteBadge
+                          count={entry.creditNoteCount}
+                          href={`/dashboard/invoices/${entry.estimationPublicId}#avoirs`}
+                        />
+                      </div>
+                    ) : null}
                   </td>
                   <td className="overflow-hidden px-4 py-3 align-middle">
                     <span className="block truncate">{entry.customerName}</span>
@@ -108,14 +132,25 @@ export function PaymentTable({ entries }: PaymentTableProps) {
                       </Link>
                       <button
                         type="button"
-                        title="Annuler le règlement"
-                        aria-label="Annuler le règlement"
-                        disabled={pendingId === entry.publicId}
-                        className={cn(iconBtn, 'text-danger hover:bg-red-50 disabled:opacity-50')}
-                        onClick={() => handleCancel(entry)}
+                        title="Créer un Avoir / Remboursement"
+                        aria-label="Créer un Avoir / Remboursement"
+                        className={cn(iconBtn, 'text-orange-700 hover:bg-orange-50')}
+                        onClick={() => setCreditEntry(entry)}
                       >
-                        <IconTrash className="h-4 w-4" />
+                        <IconUndo className="h-4 w-4" />
                       </button>
+                      {isManager ? (
+                        <button
+                          type="button"
+                          title="Annuler le règlement"
+                          aria-label="Annuler le règlement"
+                          disabled={pendingId === entry.publicId}
+                          className={cn(iconBtn, 'text-danger hover:bg-red-50 disabled:opacity-50')}
+                          onClick={() => handleCancel(entry)}
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -124,6 +159,22 @@ export function PaymentTable({ entries }: PaymentTableProps) {
           </tbody>
         </table>
       </div>
+      {creditEntry ? (
+        <CreditNoteModal
+          open
+          invoicePublicId={creditEntry.invoicePublicId}
+          invoiceCode={creditEntry.invoiceCode}
+          maxAmount={creditEntry.refundableAmount}
+          createAction={createCreditNote}
+          onClose={() => setCreditEntry(null)}
+          onDone={(publicId) => {
+            setCreditEntry(null)
+            router.refresh()
+            window.open(`/dashboard/invoices/credit-notes/${publicId}/print?format=ticket`, '_blank')
+          }}
+        />
+      ) : null}
+      {modal}
     </Card>
   )
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/auth'
+import { requirePageRole } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import { ReportsPrintView } from '@/components/reports/reports-print-view'
 import {
   getOutstandingReport,
@@ -28,6 +30,7 @@ export default async function ReportsPrintPage({
 }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  await requirePageRole(MANAGER_ROLES)
 
   const params = await searchParams
   const preset = parseReportPreset(params.preset)

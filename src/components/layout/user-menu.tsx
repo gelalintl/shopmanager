@@ -5,13 +5,7 @@ import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Caption, Text } from '@/components/ui/typography'
 import { cn } from '@/lib/cn'
-
-const roleLabels: Record<string, string> = {
-  SUPER_ADMIN: 'Super administrateur',
-  TENANT_SUPERADMIN: 'Directeur',
-  ADMIN: 'Administrateur',
-  USER: 'Opérateur',
-}
+import { roleLabels } from '@/lib/auth'
 
 function initialsFrom(name?: string | null, pseudo?: string | null) {
   const source = name?.trim() || pseudo?.trim() || '?'

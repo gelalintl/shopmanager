@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { PT_Sans } from 'next/font/google'
 import { SessionProvider } from '@/components/providers/session-provider'
+import { AppToaster } from '@/components/ui/toaster'
 import './globals.css'
 
 const ptSans = PT_Sans({
@@ -23,7 +24,10 @@ export default function RootLayout({
   return (
     <html lang="fr" className={ptSans.variable}>
       <body className={`${ptSans.className} antialiased`}>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          {children}
+          <AppToaster />
+        </SessionProvider>
       </body>
     </html>
   )

@@ -1,36 +1,92 @@
-import { BrandLogo } from '@/components/ui/logo'
 import { cn } from '@/lib/cn'
 
 type CompanyBrandProps = {
   name: string
   logoPath?: string | null
+  logoUrl?: string | null
   size?: 'sm' | 'md'
-  showFallbackLabel?: boolean
+  align?: 'left' | 'center'
   className?: string
 }
 
-const sizeClass = {
+const imageSize = {
   sm: 'h-12 max-w-[10rem]',
   md: 'h-16 max-w-[12rem]',
+}
+
+const nameSize = {
+  sm: 'text-2xl leading-tight',
+  md: 'text-3xl leading-tight',
 }
 
 export function CompanyBrand({
   name,
   logoPath,
+  logoUrl,
   size = 'sm',
-  showFallbackLabel = true,
+  align = 'left',
   className,
 }: CompanyBrandProps) {
-  if (logoPath) {
+  const src = (logoPath || logoUrl || '').trim()
+  const centered = align === 'center'
+
+  if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={logoPath}
+        src={src}
         alt={name}
-        className={cn('w-auto object-contain object-left', sizeClass[size], className)}
+        className={cn(
+          'w-auto object-contain',
+          centered ? 'mx-auto object-center' : 'object-left',
+          imageSize[size],
+          className,
+        )}
       />
     )
   }
 
-  return <BrandLogo size={size} showLabel={showFallbackLabel} className={className} />
+  return (
+    <p
+      className={cn(
+        'font-sans font-bold tracking-tight text-cobalt',
+        nameSize[size],
+        centered ? 'text-center' : 'text-left',
+        className,
+      )}
+    >
+      {name}
+    </p>
+  )
+}
+
+export function PrintCopyBadge({ label, className }: { label: string; className?: string }) {
+  return (
+    <p
+      className={cn(
+        'inline-flex rounded-full border border-cobalt bg-soft-cobalt px-3 py-0.5',
+        'text-[10px] font-bold tracking-[0.14em] text-cobalt uppercase',
+        className,
+      )}
+    >
+      {label}
+    </p>
+  )
+}
+
+export function PrintGeneratedBy({ className }: { className?: string }) {
+  return <p className={cn('text-[9px] text-gray-400', className)}>Généré par ShopManager</p>
+}
+
+export function PrintCutLine({ className }: { className?: string }) {
+  return (
+    <p
+      className={cn(
+        'pos-cut-rule my-4 text-center text-[10px] tracking-wide text-gray-400 print:my-0',
+        className,
+      )}
+    >
+      ------------------ DÉCOUPE CAISSE ------------------
+    </p>
+  )
 }

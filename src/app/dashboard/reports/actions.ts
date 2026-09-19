@@ -3,6 +3,8 @@
 import { InvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getTenantContext } from '@/lib/tenant'
+import { checkRole } from '@/lib/rbac'
+import { MANAGER_ROLES } from '@/lib/auth'
 import {
   lineFinancials,
   monthBuckets,
@@ -14,6 +16,7 @@ import {
   type VatRow,
 } from '@/lib/analytics'
 import { toPrintCompany } from '@/lib/settings'
+import { invoiceSettlement } from '@/lib/invoices'
 
 const activeCollections = { isDeleted: false } as const
 
@@ -29,6 +32,7 @@ export async function getSalesReport(startDate?: string, endDate?: string, prese
   }
   const ctx = await getTenantContext()
   if (!ctx.ok) return empty
+  if (!(await checkRole(MANAGER_ROLES))) return empty
 
   const companyId = ctx.user.companyId
   const { start, end } = reportRange(preset, startDate, endDate)
@@ -100,6 +104,7 @@ export async function getSalesReport(startDate?: string, endDate?: string, prese
 export async function getOutstandingReport(): Promise<ReceivableRow[]> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return []
+  if (!(await checkRole(MANAGER_ROLES))) return []
 
   const now = new Date()
   const invoices = await prisma.invoice.findMany({
@@ -108,14 +113,18 @@ export async function getOutstandingReport(): Promise<ReceivableRow[]> {
       customer: { select: { publicId: true, name: true } },
       estimation: { select: { totalAmount: true } },
       collections: { where: activeCollections, select: { amount: true } },
+      creditNotes: { select: { amount: true } },
     },
   })
 
   const byCustomer = new Map<string, ReceivableRow>()
   for (const invoice of invoices) {
     const billed = Number(invoice.estimation.totalAmount)
-    const collected = invoice.collections.reduce((sum, col) => sum + Number(col.amount), 0)
-    const remaining = Math.max(billed - collected, 0)
+    const collectedRaw = invoice.collections.reduce((sum, col) => sum + Number(col.amount), 0)
+    const credited = invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
+    const settled = invoiceSettlement(billed, collectedRaw, credited)
+    const remaining = settled.remaining
+    const collected = settled.netPaid
     if (remaining <= 0) continue
     const overdue = invoice.dueDate && invoice.dueDate.getTime() < now.getTime() ? remaining : 0
     const current = byCustomer.get(invoice.customer.publicId) ?? {
@@ -152,6 +161,7 @@ export async function getVatReport(startDate?: string, endDate?: string, preset:
   const empty = { rows: [], ht: 0, vat: 0, ttc: 0 }
   const ctx = await getTenantContext()
   if (!ctx.ok) return empty
+  if (!(await checkRole(MANAGER_ROLES))) return empty
 
   const { start, end } = reportRange(preset, startDate, endDate)
   const invoices = await prisma.invoice.findMany({
@@ -204,6 +214,7 @@ export async function getVatReport(startDate?: string, endDate?: string, preset:
 export async function getProductSalesReport(startDate?: string, endDate?: string, preset: ReportPreset = 'month'): Promise<ProductSaleRow[]> {
   const ctx = await getTenantContext()
   if (!ctx.ok) return []
+  if (!(await checkRole(MANAGER_ROLES))) return []
 
   const { start, end } = reportRange(preset, startDate, endDate)
   const invoices = await prisma.invoice.findMany({
@@ -256,6 +267,7 @@ export async function getProductSalesReport(startDate?: string, endDate?: string
 export async function getReportCompany() {
   const ctx = await getTenantContext()
   if (!ctx.ok) return null
+  if (!(await checkRole(MANAGER_ROLES))) return null
   const company = await prisma.company.findFirst({
     where: { id: ctx.user.companyId, isActive: true },
   })

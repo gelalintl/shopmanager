@@ -3,11 +3,12 @@
 import { FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Caption, Text } from '@/components/ui/typography'
+import { Text } from '@/components/ui/typography'
 import { InputField, controlClass } from '@/components/ui/input'
 import { recordPayment } from '@/app/dashboard/payments/actions'
 import { formatCfa } from '@/lib/invoices'
 import { PAYMENT_METHODS, paymentMethodLabels } from '@/lib/payments'
+import { toastResult } from '@/lib/notify'
 
 type PaymentDialogProps = {
   open: boolean
@@ -26,7 +27,6 @@ export function PaymentDialog({
   onClose,
   onDone,
 }: PaymentDialogProps) {
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   if (!open) return null
@@ -35,7 +35,6 @@ export function PaymentDialog({
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     setLoading(true)
-    setError(null)
     const result = await recordPayment({
       invoicePublicId,
       amount: Number(form.get('amount')),
@@ -44,10 +43,7 @@ export function PaymentDialog({
       paymentMethod: String(form.get('paymentMethod') || 'CASH'),
     })
     setLoading(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
+    if (!toastResult(result, 'Règlement enregistré.')) return
     onDone?.(result.publicId)
     onClose()
   }
@@ -61,11 +57,6 @@ export function PaymentDialog({
           Reste à payer : {formatCfa(remaining)}
         </Text>
         <form onSubmit={handleSubmit} className="mt-2">
-          {error ? (
-            <Caption color="danger" className="italic">
-              *{error}
-            </Caption>
-          ) : null}
           <InputField
             id="amount"
             name="amount"

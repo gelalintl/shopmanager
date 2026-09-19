@@ -3,9 +3,11 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { BrandLogo } from '@/components/ui/logo'
 import { cn } from '@/lib/cn'
 import { dashboardNav } from '@/components/layout/nav'
+import { roleAllowed } from '@/lib/auth'
 
 function IconDashboard({ className }: { className?: string }) {
   return (
@@ -14,6 +16,16 @@ function IconDashboard({ className }: { className?: string }) {
       <rect x="13" y="3" width="8" height="5" rx="1.5" />
       <rect x="13" y="10" width="8" height="11" rx="1.5" />
       <rect x="3" y="13" width="8" height="8" rx="1.5" />
+    </svg>
+  )
+}
+
+function IconPos({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="4" y="8" width="16" height="12" rx="2" />
+      <path d="M8 8V6.5A2.5 2.5 0 0 1 10.5 4h3A2.5 2.5 0 0 1 16 6.5V8" />
+      <path d="M8 13h2M12 13h2M16 13h.01M8 16h8" />
     </svg>
   )
 }
@@ -66,6 +78,17 @@ function IconReports({ className }: { className?: string }) {
   )
 }
 
+function IconUsers({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M2.8 19a5.2 5.2 0 0 1 10.4 0" />
+      <circle cx="17" cy="9" r="2.2" />
+      <path d="M14.6 19a4.4 4.4 0 0 1 6.6-3.8" />
+    </svg>
+  )
+}
+
 function IconSettings({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -93,11 +116,13 @@ function IconChevronRight({ className }: { className?: string }) {
 
 const icons: Record<string, (props: { className?: string }) => ReactNode> = {
   '/dashboard': IconDashboard,
+  '/dashboard/pos': IconPos,
   '/dashboard/products': IconProducts,
   '/dashboard/invoices': IconInvoices,
   '/dashboard/payments': IconPayments,
   '/dashboard/reports': IconReports,
   '/dashboard/customers': IconCustomers,
+  '/dashboard/users': IconUsers,
   '/dashboard/settings': IconSettings,
 }
 
@@ -133,7 +158,9 @@ function persistCollapsed(next: boolean) {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => true)
+  const items = dashboardNav.filter((item) => !item.roles || roleAllowed(session?.user?.role, item.roles))
 
   return (
     <aside
@@ -182,7 +209,7 @@ export function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="Navigation principale">
         <ul className="flex flex-col gap-1">
-          {dashboardNav.map((item) => {
+          {items.map((item) => {
             const Icon = icons[item.href]
             const active = isActivePath(pathname, item.href, item.exact)
 

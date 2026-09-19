@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import {
   computeTotals,
+  invoiceSettlement,
   lineHt,
   normalizeEstimationStatus,
   parsePrintSettings,
@@ -12,6 +13,7 @@ import {
   type PrintCustomer,
   type PrintSettings,
 } from '@/lib/invoices'
+import type { CreditNoteHistoryItem } from '@/lib/credit-notes'
 import { toPrintCompany } from '@/lib/settings'
 
 const estimationInclude = {
@@ -23,6 +25,10 @@ const estimationInclude = {
       collections: {
         where: { isDeleted: false },
         orderBy: { paymentDate: 'asc' as const },
+      },
+      creditNotes: {
+        include: { createdBy: { select: { name: true, pseudo: true } } },
+        orderBy: { createdAt: 'asc' as const },
       },
     },
   },
@@ -49,6 +55,11 @@ export type LoadedInvoiceDocument = {
   settings: PrintSettings
   paidAmount: number
   remaining: number
+  creditNoteCount: number
+  creditNoteTotal: number
+  creditNotes: CreditNoteHistoryItem[]
+  cancelReason: string | null
+  cancelRequestedAt: string | null
   payments: Array<{
     publicId: string
     amount: number
@@ -103,12 +114,23 @@ function mapDocument(
       status: string
       dueDate: Date | null
       createdAt: Date
+      cancelReason: string | null
+      cancelRequestedAt: Date | null
       collections: Array<{
         publicId: string
         amount: bigint
         paymentDate: Date
         note: string | null
         paymentMethod?: string
+      }>
+      creditNotes: Array<{
+        publicId: string
+        code: string
+        amount: bigint
+        reason: string
+        restock: boolean
+        createdAt: Date
+        createdBy: { name: string; pseudo: string }
       }>
     } | null
   },
@@ -124,10 +146,13 @@ function mapDocument(
     }
   })
   const totals = computeTotals(lines, estimation.hasTva, estimation.globalDiscountRate)
-  const paidAmount = estimation.invoice
+  const collected = estimation.invoice
     ? estimation.invoice.collections.reduce((sum, col) => sum + Number(col.amount), 0)
     : 0
-  const remaining = Math.max(totals.ttc - paidAmount, 0)
+  const credited = estimation.invoice
+    ? estimation.invoice.creditNotes.reduce((sum, note) => sum + Number(note.amount), 0)
+    : 0
+  const settlement = invoiceSettlement(totals.ttc, collected, credited)
   const kind: DocumentKind = estimation.invoice ? 'INVOICE' : 'ESTIMATION'
 
   return {
@@ -136,7 +161,7 @@ function mapDocument(
     invoicePublicId: estimation.invoice?.publicId ?? null,
     code: estimation.invoice?.code ?? estimation.code,
     status: estimation.invoice
-      ? resolveInvoiceStatus(estimation.invoice.status, remaining, estimation.invoice.dueDate)
+      ? resolveInvoiceStatus(estimation.invoice.status, settlement.remaining, estimation.invoice.dueDate)
       : normalizeEstimationStatus(estimation.status),
     customer: {
       name: estimation.customer.name,
@@ -152,8 +177,22 @@ function mapDocument(
     warranty: estimation.warranty,
     notes: estimation.notes,
     settings: parsePrintSettings(estimation.company.printSettings),
-    paidAmount,
-    remaining,
+    paidAmount: settlement.netPaid,
+    remaining: settlement.remaining,
+    creditNoteCount: estimation.invoice?.creditNotes.length ?? 0,
+    creditNoteTotal: settlement.credited,
+    creditNotes:
+      estimation.invoice?.creditNotes.map((note) => ({
+        publicId: note.publicId,
+        code: note.code,
+        amount: Number(note.amount),
+        reason: note.reason,
+        restock: note.restock,
+        createdAt: note.createdAt.toISOString(),
+        cashierName: note.createdBy.name || note.createdBy.pseudo,
+      })) ?? [],
+    cancelReason: estimation.invoice?.cancelReason ?? null,
+    cancelRequestedAt: estimation.invoice?.cancelRequestedAt?.toISOString() ?? null,
     payments:
       estimation.invoice?.collections.map((col) => ({
         publicId: col.publicId,

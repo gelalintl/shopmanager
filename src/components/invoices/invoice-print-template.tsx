@@ -1,4 +1,4 @@
-import { CompanyBrand } from '@/components/print/company-brand'
+import { CompanyBrand, PrintCopyBadge, PrintGeneratedBy } from '@/components/print/company-brand'
 import {
   amountToLetters,
   formatCfa,
@@ -39,6 +39,8 @@ type InvoicePrintTemplateProps = {
   className?: string
   validityDays?: number
   validUntil?: string | Date | null
+  copyLabel?: string | null
+  sheet?: 'a4' | 'a5'
 }
 
 export function InvoicePrintTemplate({
@@ -56,6 +58,8 @@ export function InvoicePrintTemplate({
   className,
   validityDays = 30,
   validUntil,
+  copyLabel,
+  sheet = 'a4',
 }: InvoicePrintTemplateProps) {
   const title = kind === 'INVOICE' ? 'FACTURE' : 'DEVIS'
   const decree = kind === 'INVOICE' ? 'La présente facture est arrêtée' : 'Le présent devis est arrêté'
@@ -77,17 +81,25 @@ export function InvoicePrintTemplate({
   return (
     <article
       className={cn(
-        'invoice-print-sheet flex min-h-[297mm] w-[210mm] flex-col bg-white p-10 text-[13px] text-foreground shadow-sm',
+        'invoice-print-sheet flex flex-col bg-white p-10 text-[13px] text-foreground shadow-sm',
+        sheet === 'a5'
+          ? 'invoice-print-sheet--a5 min-h-[210mm] w-[148mm]'
+          : 'min-h-[297mm] w-[210mm]',
         className,
       )}
       style={printAccentVars(settings.accentColor)}
     >
+      {copyLabel ? (
+        <div className="mb-4 flex justify-end">
+          <PrintCopyBadge label={copyLabel} />
+        </div>
+      ) : null}
       <header
         className="flex items-start justify-between gap-6 border-b pb-4"
         style={{ borderColor: 'var(--print-accent)' }}
       >
         <div>
-          <CompanyBrand name={company.name} logoPath={company.logoPath} />
+          <CompanyBrand name={company.name} logoPath={company.logoPath} logoUrl={company.logoUrl} />
           <div className="mt-3 space-y-0.5 text-foreground-muted">
             <p className="font-bold text-foreground">{company.name}</p>
             {company.slogan ? <p className="italic">{company.slogan}</p> : null}
@@ -246,6 +258,12 @@ export function InvoicePrintTemplate({
         ) : null}
         {settings.showLegalMentions && company.legalMentions ? <p>{company.legalMentions}</p> : null}
         {footerText ? <p>{footerText}</p> : null}
+        {copyLabel ? (
+          <div className="pt-2">
+            <PrintCopyBadge label={copyLabel} />
+          </div>
+        ) : null}
+        <PrintGeneratedBy className="pt-2" />
       </footer>
     </article>
   )
