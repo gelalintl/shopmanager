@@ -21,7 +21,28 @@ import { computeTotals, DEFAULT_PRINT_ACCENT, type PrintSettings } from '@/lib/i
 import type { SettingsPayload, SettingsTab } from '@/lib/settings'
 import { roleLabels } from '@/lib/auth'
 import { toastResult } from '@/lib/notify'
+import { toast } from 'sonner'
 import { cn } from '@/lib/cn'
+
+const MAX_LOGO_BYTES = 1_800_000
+const LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+
+function fileToLogoDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > MAX_LOGO_BYTES) {
+      reject(new Error('Le logo ne doit pas dépasser 1,8 Mo.'))
+      return
+    }
+    if (!LOGO_TYPES.has(file.type)) {
+      reject(new Error('Formats acceptés : PNG, JPG ou WebP.'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Impossible de lire le fichier logo.'))
+    reader.readAsDataURL(file)
+  })
+}
 
 const tabs: { id: SettingsTab; label: string }[] = [
   { id: 'profile', label: '🏢 Profil entreprise' },
@@ -99,12 +120,12 @@ function ProfileForm({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(company.logoPath ?? null)
+  const [logoDataUri, setLogoDataUri] = useState<string | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
-    const logo = data.get('logo')
     setLoading(true)
     const result = await updateCompanyProfile(
       {
@@ -118,11 +139,12 @@ function ProfileForm({
         address: String(data.get('address') ?? ''),
         postBox: String(data.get('postBox') ?? ''),
       },
-      logo instanceof File && logo.size > 0 ? logo : null,
+      logoDataUri,
     )
     setLoading(false)
     if (!toastResult(result, 'Profil entreprise enregistré.')) return
     onCompanyName(String(data.get('name') ?? ''))
+    setLogoDataUri(null)
     router.refresh()
   }
 
@@ -132,6 +154,7 @@ function ProfileForm({
     setLoading(false)
     if (!toastResult(result, 'Logo retiré.')) return
     setPreview(null)
+    setLogoDataUri(null)
   }
 
   return (
@@ -152,12 +175,27 @@ function ProfileForm({
               label="Logo (PNG, JPG, WebP)"
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                setPreview(file ? URL.createObjectURL(file) : company.logoPath ?? null)
+              onChange={async (event) => {
+                const input = event.currentTarget
+                const file = input.files?.[0]
+                if (!file) {
+                  setLogoDataUri(null)
+                  setPreview(company.logoPath ?? null)
+                  return
+                }
+                try {
+                  const uri = await fileToLogoDataUri(file)
+                  setLogoDataUri(uri)
+                  setPreview(uri)
+                } catch (error) {
+                  input.value = ''
+                  setLogoDataUri(null)
+                  setPreview(company.logoPath ?? null)
+                  toast.error(error instanceof Error ? error.message : 'Impossible de lire le logo.')
+                }
               }}
             />
-            {company.logoPath ? (
+            {preview ? (
               <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleRemoveLogo} disabled={loading}>
                 Retirer le logo
               </Button>

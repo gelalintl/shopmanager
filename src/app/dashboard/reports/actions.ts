@@ -15,7 +15,7 @@ import {
   type SalesReport,
   type VatRow,
 } from '@/lib/analytics'
-import { toPrintCompany } from '@/lib/settings'
+import { loadPrintCompany } from '@/lib/settings'
 import { invoiceSettlement } from '@/lib/invoices'
 
 const activeCollections = { isDeleted: false } as const
@@ -272,5 +272,5 @@ export async function getReportCompany() {
     where: { id: ctx.user.companyId, isActive: true },
   })
   if (!company) return null
-  return toPrintCompany(company)
+  return loadPrintCompany(company)
 }

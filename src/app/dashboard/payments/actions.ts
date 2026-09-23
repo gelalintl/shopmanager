@@ -14,6 +14,7 @@ import {
   type PaymentReceipt,
 } from '@/lib/payments'
 import { invoiceSettlement, parsePrintSettings } from '@/lib/invoices'
+import { getCompanyLogo } from '@/lib/site-settings'
 import { paginationMeta, parseLimit, parsePage } from '@/lib/pagination'
 import {
   parseSortDir,
@@ -394,7 +395,6 @@ export async function getPaymentReceipt(collectionId: string): Promise<PaymentRe
           rib: true,
           legalMentions: true,
           slogan: true,
-          logoPath: true,
           printSettings: true,
         },
       },
@@ -450,7 +450,7 @@ export async function getPaymentReceipt(collectionId: string): Promise<PaymentRe
     companyBankAccountName: extras.bankAccountName || null,
     companyLegalMentions: collection.company.legalMentions,
     companySlogan: collection.company.slogan,
-    companyLogoPath: collection.company.logoPath,
+    companyLogoPath: await getCompanyLogo(collection.companyId),
     printSettings: collection.company.printSettings,
     collectorName: collection.collector.name || collection.collector.pseudo,
   }

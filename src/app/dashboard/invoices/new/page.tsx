@@ -4,7 +4,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { InvoiceBuilder } from '@/components/invoices/invoice-builder'
 import { parsePrintSettings, type CatalogCustomer, type DocumentKind, type PrintCompany } from '@/lib/invoices'
-import { toPrintCompany } from '@/lib/settings'
+import { loadPrintCompany } from '@/lib/settings'
 
 export const metadata: Metadata = {
   title: 'SM | Nouveau document',
@@ -43,7 +43,7 @@ export default async function NewInvoicePage({
     kind: item.kind,
   }))
 
-  const printCompany: PrintCompany = toPrintCompany(company)
+  const printCompany: PrintCompany = await loadPrintCompany(company)
 
   return (
     <div className="mx-auto w-full max-w-[1400px]">

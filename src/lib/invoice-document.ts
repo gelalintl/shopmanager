@@ -14,7 +14,7 @@ import {
   type PrintSettings,
 } from '@/lib/invoices'
 import type { CreditNoteHistoryItem } from '@/lib/credit-notes'
-import { toPrintCompany } from '@/lib/settings'
+import { loadPrintCompany } from '@/lib/settings'
 
 const estimationInclude = {
   customer: true,
@@ -73,7 +73,7 @@ export type LoadedInvoiceDocument = {
   validUntil: string | null
 }
 
-function mapDocument(
+async function mapDocument(
   estimation: {
     publicId: string
     code: string
@@ -88,6 +88,7 @@ function mapDocument(
     validityDays?: number
     customer: PrintCustomer
     company: {
+      id: number
       name: string
       address: string
       postBox: string | null
@@ -134,7 +135,7 @@ function mapDocument(
       }>
     } | null
   },
-): LoadedInvoiceDocument {
+): Promise<LoadedInvoiceDocument> {
   const lines = estimation.items.map((item) => {
     const unitPrice = Number(item.unitPrice)
     return {
@@ -171,7 +172,7 @@ function mapDocument(
       email: estimation.customer.email,
       nif: estimation.customer.nif,
     },
-    company: toPrintCompany(estimation.company),
+    company: await loadPrintCompany(estimation.company),
     lines,
     totals,
     warranty: estimation.warranty,

@@ -25,8 +25,10 @@ export function PaymentReceiptTemplate({ receipt, className }: PaymentReceiptTem
         className="flex items-start justify-between gap-4 border-b pb-4"
         style={{ borderColor: 'var(--print-accent)' }}
       >
-        <CompanyBrand name={receipt.companyName} logoPath={receipt.companyLogoPath} />
-        <div className="text-right">
+        {receipt.companyLogoPath ? (
+          <CompanyBrand name={receipt.companyName} logoPath={receipt.companyLogoPath} />
+        ) : null}
+        <div className={receipt.companyLogoPath ? 'text-right' : 'ml-auto text-right'}>
           <p className="text-xs font-bold tracking-wide uppercase" style={{ color: 'var(--print-accent)' }}>
             Reçu d’encaissement
           </p>

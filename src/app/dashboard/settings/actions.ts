@@ -1,7 +1,5 @@
 'use server'
 
-import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import path from 'node:path'
 import { revalidatePath } from 'next/cache'
 import * as bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -16,7 +14,7 @@ import {
 import {
   digitsOnly,
   emptyToNull,
-  toPrintCompany,
+  loadPrintCompany,
   type AccountProfileInput,
   type CompanyProfileInput,
   type FinancialSettingsInput,
@@ -24,14 +22,14 @@ import {
   type PrintSettingsInput,
   type SettingsPayload,
 } from '@/lib/settings'
+import {
+  clearCompanyLogo,
+  getCompanyLogo,
+  normalizeLogoDataUri,
+  setCompanyLogo,
+} from '@/lib/site-settings'
 
 const PATH = '/dashboard/settings'
-const MAX_LOGO_BYTES = 1_800_000
-const LOGO_TYPES: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-}
 
 type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -46,6 +44,7 @@ function revalidateSettings() {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/invoices')
   revalidatePath('/dashboard/invoices/new')
+  revalidatePath('/dashboard/quotes')
   revalidatePath('/dashboard/payments')
   revalidatePath('/dashboard/reports')
 }
@@ -71,7 +70,7 @@ export async function getSettings(): Promise<SettingsPayload | null> {
 
   return {
     company: {
-      ...toPrintCompany(company),
+      ...(await loadPrintCompany(company)),
       phone2: company.phone2,
     },
     print: parsePrintSettings(company.printSettings),
@@ -83,7 +82,7 @@ export async function getSettings(): Promise<SettingsPayload | null> {
   }
 }
 
-export async function updateCompanyProfile(data: CompanyProfileInput, logo?: File | null): Promise<ActionResult> {
+export async function updateCompanyProfile(data: CompanyProfileInput, logoDataUri?: string | null): Promise<ActionResult> {
   const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
@@ -102,15 +101,18 @@ export async function updateCompanyProfile(data: CompanyProfileInput, logo?: Fil
 
   const company = await prisma.company.findFirst({
     where: { id: ctx.user.companyId, isActive: true },
-    select: { printSettings: true, logoPath: true },
+    select: { printSettings: true },
   })
   if (!company) return { ok: false, error: 'Entreprise introuvable.' }
 
-  let logoPath = company.logoPath
-  if (logo && logo.size > 0) {
-    const stored = await storeCompanyLogo(ctx.user.companyId, logo, company.logoPath)
-    if (!stored.ok) return stored
-    logoPath = stored.path
+  if (logoDataUri) {
+    const stored = normalizeLogoDataUri(logoDataUri)
+    if (!stored) {
+      return { ok: false, error: 'Le logo doit être une image PNG, JPG ou WebP (1,8 Mo max).' }
+    }
+    await setCompanyLogo(ctx.user.companyId, stored)
+  } else {
+    await getCompanyLogo(ctx.user.companyId)
   }
 
   const print = parsePrintSettings(company.printSettings)
@@ -127,7 +129,7 @@ export async function updateCompanyProfile(data: CompanyProfileInput, logo?: Fil
       slogan: emptyToNull(data.slogan),
       nif: emptyToNull(data.nif),
       postBox: emptyToNull(data.postBox),
-      logoPath,
+      logoPath: null,
       printSettings: print,
     },
   })
@@ -140,13 +142,7 @@ export async function removeCompanyLogo(): Promise<ActionResult> {
   const ctx = await requireManager()
   if (!ctx.ok) return { ok: false, error: ctx.error }
 
-  const company = await prisma.company.findFirst({
-    where: { id: ctx.user.companyId },
-    select: { logoPath: true },
-  })
-  if (!company) return { ok: false, error: 'Entreprise introuvable.' }
-
-  await deleteLogoFile(company.logoPath)
+  await clearCompanyLogo(ctx.user.companyId)
   await prisma.company.update({
     where: { id: ctx.user.companyId },
     data: { logoPath: null },
@@ -273,35 +269,4 @@ export async function updatePassword(data: PasswordInput): Promise<ActionResult>
   })
   revalidateSettings()
   return { ok: true }
-}
-
-async function storeCompanyLogo(
-  companyId: number,
-  file: File,
-  previousPath: string | null,
-): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
-  if (file.size > MAX_LOGO_BYTES) {
-    return { ok: false, error: 'Le logo ne doit pas dépasser 1,8 Mo.' }
-  }
-  const ext = LOGO_TYPES[file.type]
-  if (!ext) return { ok: false, error: 'Formats acceptés : PNG, JPG ou WebP.' }
-
-  const dir = path.join(process.cwd(), 'public', 'uploads', 'companies', String(companyId))
-  await mkdir(dir, { recursive: true })
-  const filename = `logo-${Date.now()}.${ext}`
-  const absolute = path.join(dir, filename)
-  const bytes = Buffer.from(await file.arrayBuffer())
-  await writeFile(absolute, bytes)
-  await deleteLogoFile(previousPath)
-  return { ok: true, path: `/uploads/companies/${companyId}/${filename}` }
-}
-
-async function deleteLogoFile(logoPath: string | null) {
-  if (!logoPath || !logoPath.startsWith('/uploads/companies/')) return
-  const absolute = path.join(process.cwd(), 'public', logoPath.replace(/^\//, ''))
-  try {
-    await unlink(absolute)
-  } catch {
-    // already gone
-  }
 }

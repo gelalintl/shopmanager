@@ -9,7 +9,7 @@ import {
   type PrintSettings,
 } from '@/lib/invoices'
 import { invoiceStatusFromPaid } from '@/lib/payments'
-import { toPrintCompany } from '@/lib/settings'
+import { loadPrintCompany } from '@/lib/settings'
 import { isServiceProduct } from '@/lib/stock'
 
 export const CREDIT_NOTE_REASONS = [
@@ -225,7 +225,7 @@ export async function loadCreditNote(companyId: number, publicId: string): Promi
     estimationPublicId: note.invoice.estimation.publicId,
     cashierName: note.createdBy.name || note.createdBy.pseudo,
     customerName: note.invoice.customer.name,
-    company: toPrintCompany(note.company),
+    company: await loadPrintCompany(note.company),
     settings: parsePrintSettings(note.company.printSettings),
   }
 }

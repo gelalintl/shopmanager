@@ -14,11 +14,6 @@ const imageSize = {
   md: 'h-16 max-w-[12rem]',
 }
 
-const nameSize = {
-  sm: 'text-2xl leading-tight',
-  md: 'text-3xl leading-tight',
-}
-
 export function CompanyBrand({
   name,
   logoPath,
@@ -30,33 +25,22 @@ export function CompanyBrand({
   const src = (logoPath || logoUrl || '').trim()
   const centered = align === 'center'
 
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={name}
-        className={cn(
-          'w-auto object-contain',
-          centered ? 'mx-auto object-center' : 'object-left',
-          imageSize[size],
-          className,
-        )}
-      />
-    )
+  if (!src.startsWith('data:image/')) {
+    return null
   }
 
   return (
-    <p
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name}
       className={cn(
-        'font-sans font-bold tracking-tight text-cobalt',
-        nameSize[size],
-        centered ? 'text-center' : 'text-left',
+        'w-auto object-contain',
+        centered ? 'mx-auto object-center' : 'object-left',
+        imageSize[size],
         className,
       )}
-    >
-      {name}
-    </p>
+    />
   )
 }
 

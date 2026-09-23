@@ -37,8 +37,12 @@ export function ReportsPrintTemplate({
         style={{ borderColor: 'var(--print-accent)' }}
       >
         <div>
-          <CompanyBrand name={company.name} logoPath={company.logoPath} logoUrl={company.logoUrl} />
-          <div className="mt-3 space-y-0.5 text-foreground-muted">
+          {company.logoPath || company.logoUrl ? (
+            <div className="mb-3">
+              <CompanyBrand name={company.name} logoPath={company.logoPath} logoUrl={company.logoUrl} />
+            </div>
+          ) : null}
+          <div className="space-y-0.5 text-foreground-muted">
             <p className="font-bold text-foreground">{company.name}</p>
             <p>{company.address}</p>
             {company.postBox ? <p>B.P. : {company.postBox}</p> : null}

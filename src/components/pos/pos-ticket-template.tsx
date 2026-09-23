@@ -50,13 +50,25 @@ export function PosTicketTemplate({
         className={cn('border-b pb-3', compact ? 'text-center' : 'flex items-start justify-between gap-4')}
         style={{ borderColor: 'var(--print-accent)' }}
       >
-        <CompanyBrand
-          name={ticket.company.name}
-          logoPath={ticket.company.logoPath}
-          logoUrl={ticket.company.logoUrl}
-          size={compact ? 'sm' : 'md'}
-          align={compact ? 'center' : 'left'}
-        />
+        <div>
+          <CompanyBrand
+            name={ticket.company.name}
+            logoPath={ticket.company.logoPath}
+            logoUrl={ticket.company.logoUrl}
+            size={compact ? 'sm' : 'md'}
+            align={compact ? 'center' : 'left'}
+          />
+          {ticket.company.logoPath || ticket.company.logoUrl ? null : (
+            <p
+              className={cn(
+                'font-sans font-bold tracking-tight text-cobalt',
+                compact ? 'text-2xl leading-tight' : 'text-3xl leading-tight',
+              )}
+            >
+              {ticket.company.name}
+            </p>
+          )}
+        </div>
         <div className={compact ? 'mt-2' : 'text-right'}>
           <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: 'var(--print-accent)' }}>
             Ticket de caisse

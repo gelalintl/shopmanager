@@ -33,13 +33,25 @@ export function CreditNotePrintTemplate({
         className={cn('border-b pb-3', compact ? 'text-center' : 'flex items-start justify-between gap-4')}
         style={{ borderColor: 'var(--print-accent)' }}
       >
-        <CompanyBrand
-          name={note.company.name}
-          logoPath={note.company.logoPath}
-          logoUrl={note.company.logoUrl}
-          size={compact ? 'sm' : 'md'}
-          align={compact ? 'center' : 'left'}
-        />
+        <div>
+          <CompanyBrand
+            name={note.company.name}
+            logoPath={note.company.logoPath}
+            logoUrl={note.company.logoUrl}
+            size={compact ? 'sm' : 'md'}
+            align={compact ? 'center' : 'left'}
+          />
+          {note.company.logoPath || note.company.logoUrl ? null : (
+            <p
+              className={cn(
+                'font-sans font-bold tracking-tight text-cobalt',
+                compact ? 'text-2xl leading-tight' : 'text-3xl leading-tight',
+              )}
+            >
+              {note.company.name}
+            </p>
+          )}
+        </div>
         <div className={compact ? 'mt-2' : 'text-right'}>
           <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: 'var(--print-accent)' }}>
             Ticket / Reçu d’avoir

@@ -4,6 +4,7 @@ import {
   type PrintCompany,
   type PrintSettings,
 } from '@/lib/invoices'
+import { getCompanyLogo, normalizeLogoDataUri } from '@/lib/site-settings'
 
 export type SettingsTab = 'profile' | 'fiscal' | 'print' | 'account'
 
@@ -83,21 +84,25 @@ export function digitsOnly(value: string) {
   return value.replace(/\D+/g, '')
 }
 
-export function toPrintCompany(company: {
-  name: string
-  address: string
-  postBox: string | null
-  phone1: string
-  phone2?: string | null
-  email: string | null
-  nif: string | null
-  rib: string | null
-  legalMentions: string | null
-  slogan: string | null
-  logoPath?: string | null
-  printSettings?: unknown
-}): PrintCompany {
+export function toPrintCompany(
+  company: {
+    name: string
+    address: string
+    postBox: string | null
+    phone1: string
+    phone2?: string | null
+    email: string | null
+    nif: string | null
+    rib: string | null
+    legalMentions: string | null
+    slogan: string | null
+    logoPath?: string | null
+    printSettings?: unknown
+  },
+  logoDataUri?: string | null,
+): PrintCompany {
   const extras = parsePrintSettings(company.printSettings)
+  const logo = normalizeLogoDataUri(logoDataUri) ?? normalizeLogoDataUri(company.logoPath)
   return {
     name: company.name,
     address: company.address,
@@ -112,9 +117,28 @@ export function toPrintCompany(company: {
     bankAccountName: extras.bankAccountName || null,
     legalMentions: company.legalMentions,
     slogan: company.slogan,
-    logoPath: company.logoPath ?? null,
-    logoUrl: company.logoPath ?? null,
+    logoPath: logo,
+    logoUrl: logo,
   }
+}
+
+export async function loadPrintCompany(company: {
+  id: number
+  name: string
+  address: string
+  postBox: string | null
+  phone1: string
+  phone2?: string | null
+  email: string | null
+  nif: string | null
+  rib: string | null
+  legalMentions: string | null
+  slogan: string | null
+  logoPath?: string | null
+  printSettings?: unknown
+}): Promise<PrintCompany> {
+  const logo = await getCompanyLogo(company.id)
+  return toPrintCompany(company, logo)
 }
 
 export function settingsFromCompany(printSettings: unknown): PrintSettings {

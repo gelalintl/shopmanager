@@ -18,7 +18,7 @@ import {
   formatDocumentCode,
   parsePrintSettings,
 } from '@/lib/invoices'
-import { toPrintCompany } from '@/lib/settings'
+import { loadPrintCompany } from '@/lib/settings'
 import { parsePaymentMethod, paymentMethodLabels } from '@/lib/payments'
 import { STAFF_ROLES } from '@/lib/auth'
 import { requireRole } from '@/lib/rbac'
@@ -465,7 +465,7 @@ export async function getPosTicket(invoicePublicId: string): Promise<PosTicket |
     hasTva: invoice.estimation.hasTva,
     lines,
     totals,
-    company: toPrintCompany(invoice.estimation.company),
+    company: await loadPrintCompany(invoice.estimation.company),
     settings: parsePrintSettings(invoice.estimation.company.printSettings),
   }
 }
