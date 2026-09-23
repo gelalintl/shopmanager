@@ -24,6 +24,11 @@ import {
   type DocumentListItem,
 } from '@/lib/invoices'
 import { paginationMeta, parseLimit, parsePage, type Paginated } from '@/lib/pagination'
+import {
+  CUSTOMER_SORTS,
+  parseSortDir,
+  parseSortKey,
+} from '@/lib/table-sort'
 
 const PATH = '/dashboard/customers'
 
@@ -39,19 +44,12 @@ function revalidateCustomerPaths() {
 
 function parsePayload(data: CustomerInput): { ok: true; payload: ParsedCustomer } | { ok: false; error: string } {
   const name = String(data.name ?? '').trim()
-  if (name.length < 3) {
-    return { ok: false, error: 'Le nom du client est obligatoire (3 caractères minimum).' }
+  if (!name) {
+    return { ok: false, error: 'Le nom du client est obligatoire.' }
   }
 
-  const address = String(data.address ?? '').trim()
-  if (!address) {
-    return { ok: false, error: 'L’adresse est obligatoire.' }
-  }
-
-  const phone = digitsOnly(String(data.phone ?? ''))
-  if (phone.length < 8) {
-    return { ok: false, error: 'Le numéro de téléphone est obligatoire (8 chiffres minimum).' }
-  }
+  const address = String(data.address ?? '').trim() || null
+  const phone = digitsOnly(String(data.phone ?? '')) || null
 
   const email = String(data.email ?? '').trim()
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -79,8 +77,8 @@ function parsePayload(data: CustomerInput): { ok: true; payload: ParsedCustomer 
 type ParsedCustomer = {
   kind: CustomerKind
   name: string
-  address: string
-  phone: string
+  address: string | null
+  phone: string | null
   email: string | null
   nif: string | null
   postBox: string | null
@@ -93,7 +91,7 @@ function mapListItem(row: {
   nif: string | null
   phone: string | null
   email: string | null
-  address: string
+  address: string | null
   postBox: string | null
   invoices: Array<{
     estimation: { totalAmount: bigint }
@@ -132,7 +130,7 @@ async function findOwnedCustomer(companyId: number, id: string) {
 export async function getCustomers(
   page = 1,
   limit = 15,
-  filters: { q?: string; type?: CustomerTypeFilter } = {},
+  filters: { q?: string; type?: CustomerTypeFilter; sort?: string; dir?: string } = {},
 ): Promise<Paginated<CustomerListItem> & { customerCount: number; companies: number; individuals: number; billed: number; remaining: number }> {
   const empty = {
     data: [] as CustomerListItem[],
@@ -150,6 +148,8 @@ export async function getCustomers(
 
   const search = String(filters.q ?? '').trim()
   const type = filters.type && filters.type !== 'all' ? toPrismaKind(filters.type) : undefined
+  const sort = parseSortKey(filters.sort, CUSTOMER_SORTS, 'name')
+  const dir = parseSortDir(filters.dir, 'asc')
   const listWhere = {
     companyId: ctx.user.companyId,
     isDeleted: false,
@@ -184,9 +184,17 @@ export async function getCustomers(
     }),
   ])
   const meta = paginationMeta(totalCount, parsePage(page), parseLimit(limit))
+  const orderBy =
+    sort === 'kind'
+      ? { kind: dir }
+      : sort === 'nif'
+        ? { nif: dir }
+        : sort === 'contact'
+          ? { phone: dir }
+          : { name: dir }
   const paged = await prisma.customer.findMany({
     where: listWhere,
-    orderBy: { name: 'asc' },
+    orderBy,
     include: invoiceInclude,
     skip: meta.skip,
     take: meta.take,

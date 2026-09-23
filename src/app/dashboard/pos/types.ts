@@ -10,6 +10,7 @@ export type PosProduct = {
   designation: string
   unitPrice: number
   stock: number
+  type: 'MARCHANDISE' | 'PRESTATION'
 }
 
 export type CartItem = {
@@ -20,6 +21,7 @@ export type CartItem = {
   unitPrice: number
   quantity: number
   stock: number
+  type: 'MARCHANDISE' | 'PRESTATION'
 }
 
 export type PosLineInput = {

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { InvoicePrintTemplate } from '@/components/invoices/invoice-print-template'
 import { DeliveryNoteTemplate } from '@/components/invoices/delivery-note-template'
 import type { LoadedInvoiceDocument } from '@/lib/invoice-document'
-import { formatFrDate } from '@/lib/invoices'
+import { formatFrDate, isProformaStatus } from '@/lib/invoices'
 
 type InvoicePrintViewProps = {
   document: LoadedInvoiceDocument
@@ -24,6 +24,7 @@ export function InvoicePrintView({ document, autoPrint = false, sheet = 'a4' }: 
   const dateLabel = `Niamey, le ${formatFrDate(document.issueDate ?? document.createdAt)}`
   const shared = {
     kind: document.kind,
+    status: document.status,
     code: document.code,
     dateLabel,
     company: document.company,
@@ -45,7 +46,13 @@ export function InvoicePrintView({ document, autoPrint = false, sheet = 'a4' }: 
         <Link href={`/dashboard/invoices/${document.estimationPublicId}`}>
           <Button variant="outline">Retour</Button>
         </Link>
-        <Button onClick={() => window.print()}>Imprimer / PDF</Button>
+        <Button onClick={() => window.print()}>
+          {document.kind === 'INVOICE'
+            ? 'Imprimer / PDF'
+            : isProformaStatus(document.status)
+              ? 'Imprimer la proforma / PDF'
+              : 'Imprimer le devis / PDF'}
+        </Button>
       </div>
       <div className="flex flex-col items-center gap-6 py-6 print:gap-0 print:py-0">
         {document.kind === 'INVOICE' ? (
@@ -66,7 +73,7 @@ export function InvoicePrintView({ document, autoPrint = false, sheet = 'a4' }: 
             />
           </>
         ) : (
-          <InvoicePrintTemplate {...shared} />
+          <InvoicePrintTemplate {...shared} className="print-page" />
         )}
       </div>
     </div>

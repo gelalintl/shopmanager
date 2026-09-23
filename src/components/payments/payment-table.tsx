@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react'
 import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
 import { IconPrinter, IconTrash, IconUndo } from '@/components/ui/icons'
+import { SortableHeader } from '@/components/ui/sortable-header'
 import { cancelPayment } from '@/app/dashboard/payments/actions'
 import { createCreditNote } from '@/app/dashboard/collections/actions'
 import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-note-modal'
@@ -56,12 +57,12 @@ export function PaymentTable({ entries }: PaymentTableProps) {
         <table className="w-full min-w-[56rem] table-fixed text-left">
           <thead className="border-b border-subtle-border bg-powder/80">
             <tr>
-              <th className="w-44 px-4 py-3 text-sm font-bold text-foreground-muted">Date & heure</th>
-              <th className="w-36 px-4 py-3 text-sm font-bold text-foreground-muted">N° Facture</th>
-              <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Client</th>
-              <th className="w-40 px-4 py-3 text-sm font-bold text-foreground-muted">Mode</th>
-              <th className="w-40 px-4 py-3 text-sm font-bold text-foreground-muted">Montant</th>
-              <th className="w-40 px-4 py-3 text-sm font-bold text-foreground-muted">Agent</th>
+              <SortableHeader className="w-44" sortKey="date" label="Date & heure" fallbackKey="date" fallbackDir="desc" initialDir="desc" />
+              <SortableHeader className="w-36" sortKey="invoice" label="N° Facture" fallbackKey="date" fallbackDir="desc" />
+              <SortableHeader sortKey="customer" label="Client" fallbackKey="date" fallbackDir="desc" />
+              <SortableHeader className="w-40" sortKey="method" label="Mode" fallbackKey="date" fallbackDir="desc" />
+              <SortableHeader className="w-40" sortKey="amount" label="Montant" fallbackKey="date" fallbackDir="desc" initialDir="desc" />
+              <SortableHeader className="w-40" sortKey="agent" label="Agent" fallbackKey="date" fallbackDir="desc" />
               <th className="w-28 px-3 py-3 text-sm font-bold text-foreground-muted">Actions</th>
             </tr>
           </thead>

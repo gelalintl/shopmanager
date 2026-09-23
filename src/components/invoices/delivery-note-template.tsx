@@ -76,7 +76,7 @@ export function DeliveryNoteTemplate({
           <div className="mt-1 font-bold">
             <p>{customer.name}</p>
             {customer.phone ? <p>Tél. : {customer.phone}</p> : null}
-            <p>{customer.address}</p>
+            {customer.address ? <p>{customer.address}</p> : null}
             {customer.postBox ? <p>B.P. : {customer.postBox}</p> : null}
             {customer.nif ? <p>NIF : {customer.nif}</p> : null}
           </div>

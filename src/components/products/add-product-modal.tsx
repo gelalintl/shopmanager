@@ -8,7 +8,13 @@ import { createProduct, updateProduct } from '@/app/dashboard/products/actions'
 import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { useProductContext } from '@/context/product-context'
 import { toastResult } from '@/lib/notify'
-import type { ProductListItem } from '@/lib/products'
+import { cn } from '@/lib/cn'
+import {
+  isServiceProduct,
+  parseProductType,
+  type ProductKind,
+  type ProductListItem,
+} from '@/lib/products'
 
 type AddProductModalProps = {
   open: boolean
@@ -17,16 +23,35 @@ type AddProductModalProps = {
 }
 
 export function AddProductModal({ open, product, onClose }: AddProductModalProps) {
+  if (!open) return null
+
+  return (
+    <AddProductForm
+      key={product?.publicId ?? 'new'}
+      product={product}
+      onClose={onClose}
+    />
+  )
+}
+
+function AddProductForm({
+  product,
+  onClose,
+}: {
+  product?: ProductListItem | null
+  onClose: () => void
+}) {
   const editing = Boolean(product)
   const [loading, setLoading] = useState(false)
+  const [type, setType] = useState<ProductKind>(parseProductType(product?.type))
   const { refreshProducts } = useProductContext()
   const { isManager, runRestricted, modal } = useRestrictedAction()
-
-  if (!open) return null
+  const service = isServiceProduct(type)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
+    form.set('type', type)
 
     setLoading(true)
 
@@ -35,6 +60,7 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
         publicId: product.publicId,
         designation: String(form.get('designation') ?? ''),
         code: String(form.get('code') ?? ''),
+        type,
         unitPrice: Number(form.get('unitPrice')),
         purchasePrice: String(form.get('purchasePrice') ?? '').trim()
           ? Number(form.get('purchasePrice'))
@@ -96,7 +122,9 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
           <Text variant="muted" size="sm" className="mt-1">
             {editing
               ? 'Mettez à jour la fiche article.'
-              : 'Renseignez la désignation, les prix et le stock initial.'}
+              : service
+                ? 'Renseignez la désignation et le tarif de la prestation.'
+                : 'Renseignez la désignation, les prix et le stock initial.'}
           </Text>
         </div>
 
@@ -105,6 +133,26 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col overflow-y-auto px-6 pb-6"
         >
+          <input type="hidden" name="type" value={type} />
+          <p className="mt-2.5 mb-1 font-sans text-sm font-bold text-foreground">Type</p>
+          <div className="flex gap-2" role="group" aria-label="Type de produit">
+            {(['MARCHANDISE', 'PRESTATION'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setType(option)}
+                className={cn(
+                  'flex-1 rounded-full border px-3 py-2 text-sm font-bold transition-all duration-200',
+                  type === option
+                    ? 'border-cobalt bg-cobalt text-white'
+                    : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                )}
+              >
+                {option === 'MARCHANDISE' ? 'Marchandise' : 'Prestation de service'}
+              </button>
+            ))}
+          </div>
+
           <InputField
             id="designation"
             name="designation"
@@ -141,7 +189,7 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
             placeholder="Prix d'achat"
             defaultValue={product?.purchasePrice ?? undefined}
           />
-          {!editing ? (
+          {!service && !editing ? (
             <InputField
               id="initialQuantity"
               name="initialQuantity"
@@ -153,16 +201,18 @@ export function AddProductModal({ open, product, onClose }: AddProductModalProps
               defaultValue={0}
             />
           ) : null}
-          <InputField
-            id="alertThreshold"
-            name="alertThreshold"
-            label="Seuil d'alerte"
-            type="number"
-            min={0}
-            step={1}
-            placeholder="Seuil minimum"
-            defaultValue={product?.alertThreshold ?? 0}
-          />
+          {!service ? (
+            <InputField
+              id="alertThreshold"
+              name="alertThreshold"
+              label="Seuil d'alerte"
+              type="number"
+              min={0}
+              step={1}
+              placeholder="Seuil minimum"
+              defaultValue={product?.alertThreshold ?? 0}
+            />
+          ) : null}
 
           <div className="mt-auto flex gap-3 pt-6">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>

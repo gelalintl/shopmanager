@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Caption, Heading, Text } from '@/components/ui/typography'
 import { controlClass } from '@/components/ui/input'
-import { IconPrinter, IconSearch, IconTrash, IconUndo } from '@/components/ui/icons'
+import { IconPlus, IconPrinter, IconSearch, IconTrash, IconUndo } from '@/components/ui/icons'
 import { cn } from '@/lib/cn'
 import { computeTotals, formatCfa } from '@/lib/invoices'
 import { getStockStatus } from '@/lib/products'
@@ -21,7 +21,10 @@ import {
 import { type CartItem, type PosProduct, type PosSaleSuccess, WALK_IN_CUSTOMER_NAME } from '@/app/dashboard/pos/types'
 import type { CatalogCustomer } from '@/lib/invoices'
 import { CreditNoteModal } from '@/components/invoices/credit-note-modal'
+import { QuickProductModal } from '@/components/invoices/quick-product-modal'
 import { toast } from 'sonner'
+import { isServiceProduct } from '@/lib/products'
+import type { ProductSelectItem } from '@/app/dashboard/products/actions'
 
 function matchesQuery(product: PosProduct, query: string) {
   const needle = query.trim().toLowerCase()
@@ -31,6 +34,18 @@ function matchesQuery(product: PosProduct, query: string) {
     product.code.toLowerCase().includes(needle) ||
     product.designation.toLowerCase().includes(needle)
   )
+}
+
+function toPosProduct(product: ProductSelectItem): PosProduct {
+  return {
+    id: product.id,
+    publicId: product.publicId,
+    code: product.code,
+    designation: product.name,
+    unitPrice: product.unitPrice,
+    stock: product.stock,
+    type: product.type,
+  }
 }
 
 function stockTone(quantity: number) {
@@ -59,6 +74,7 @@ export function PosWorkspace() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<PosSaleSuccess | null>(null)
   const [creditOpen, setCreditOpen] = useState(false)
+  const [quickOpen, setQuickOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -131,28 +147,35 @@ export function PosWorkspace() {
   const canCheckout = cart.length > 0 && received >= totals.ttc && totals.ttc > 0 && !loading
 
   function remainingStock(productId: number, ignoreCart = false) {
+    const line = cart.find((item) => item.productId === productId)
+    if (line && isServiceProduct(line.type)) return Number.POSITIVE_INFINITY
     const base = stockByProduct.get(productId) ?? 0
     if (ignoreCart) return base
-    const inCart = cart.find((line) => line.productId === productId)?.quantity ?? 0
+    const inCart = line?.quantity ?? 0
     return base - inCart
   }
 
   function addProduct(product: PosProduct, quantity = 1) {
-    const available = remainingStock(product.id)
-    if (available < quantity) {
-      toast.error(
-        product.stock <= 0
-          ? `${product.designation} est en rupture.`
-          : `Stock insuffisant pour ${product.designation} (reste ${Math.max(available, 0)}).`,
-      )
-      return
+    const service = isServiceProduct(product.type)
+    if (!service) {
+      const available = remainingStock(product.id)
+      if (available < quantity) {
+        toast.error(
+          product.stock <= 0
+            ? `${product.designation} est en rupture.`
+            : `Stock insuffisant pour ${product.designation} (reste ${Math.max(available, 0)}).`,
+        )
+        return
+      }
     }
 
     setCart((current) => {
       const existing = current.find((line) => line.productId === product.id)
       if (existing) {
         return current.map((line) =>
-          line.productId === product.id ? { ...line, quantity: line.quantity + quantity, stock: product.stock } : line,
+          line.productId === product.id
+            ? { ...line, quantity: line.quantity + quantity, stock: product.stock, type: product.type }
+            : line,
         )
       }
       return [
@@ -165,6 +188,7 @@ export function PosWorkspace() {
           unitPrice: product.unitPrice,
           quantity,
           stock: product.stock,
+          type: product.type,
         },
       ]
     })
@@ -176,7 +200,9 @@ export function PosWorkspace() {
   function setQuantity(productId: number, quantity: number) {
     const line = cart.find((item) => item.productId === productId)
     if (!line) return
-    const max = stockByProduct.get(productId) ?? line.stock
+    const max = isServiceProduct(line.type)
+      ? Number.POSITIVE_INFINITY
+      : (stockByProduct.get(productId) ?? line.stock)
     const next = Math.min(Math.max(Math.floor(quantity), 0), max)
     if (next <= 0) {
       setCart((current) => current.filter((item) => item.productId !== productId))
@@ -243,7 +269,8 @@ export function PosWorkspace() {
               <label htmlFor="pos-search" className="mb-1 block text-sm font-bold">
                 Recherche produit
               </label>
-              <div className="relative">
+              <div className="flex items-end gap-2">
+                <div className="relative min-w-0 flex-1">
                 <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-foreground-muted" />
                 <input
                   ref={searchRef}
@@ -280,6 +307,16 @@ export function PosWorkspace() {
                     }
                   }}
                 />
+                </div>
+                <button
+                  type="button"
+                  title="Nouveau produit rapide"
+                  aria-label="Nouveau produit rapide"
+                  className="mb-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                  onClick={() => setQuickOpen(true)}
+                >
+                  <IconPlus className="h-4 w-4" />
+                </button>
               </div>
               {suggestOpen && suggestions.length > 0 ? (
                 <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-subtle-border bg-white shadow-lg">
@@ -300,7 +337,9 @@ export function PosWorkspace() {
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="block font-bold">{formatCfa(product.unitPrice)}</span>
-                          <span className={cn('text-xs', stockTone(product.stock))}>Stock {product.stock}</span>
+                          <span className={cn('text-xs', isServiceProduct(product.type) ? 'text-cobalt' : stockTone(product.stock))}>
+                            {isServiceProduct(product.type) ? 'Prestation' : `Stock ${product.stock}`}
+                          </span>
                         </span>
                       </button>
                     </li>
@@ -348,12 +387,13 @@ export function PosWorkspace() {
             </Card>
           ) : null}
           {frequent.map((product) => {
+            const service = isServiceProduct(product.type)
             const left = remainingStock(product.id)
             return (
               <button
                 key={product.publicId}
                 type="button"
-                disabled={left <= 0}
+                disabled={!service && left <= 0}
                 onClick={() => addProduct(product)}
                 className={cn(
                   'rounded-2xl border border-subtle-border bg-white p-4 text-left shadow-sm transition-all duration-200',
@@ -369,7 +409,9 @@ export function PosWorkspace() {
                 </Text>
                 <div className="mt-3 flex items-end justify-between gap-2">
                   <span className="text-lg font-bold">{formatCfa(product.unitPrice)}</span>
-                  <span className={cn('text-xs font-bold', stockTone(left))}>Stock {left}</span>
+                  <span className={cn('text-xs font-bold', service ? 'text-cobalt' : stockTone(left))}>
+                    {service ? 'Prestation' : `Stock ${left}`}
+                  </span>
                 </div>
               </button>
             )
@@ -577,6 +619,21 @@ export function PosWorkspace() {
           }}
         />
       ) : null}
+      <QuickProductModal
+        open={quickOpen}
+        initialName={query}
+        onClose={() => setQuickOpen(false)}
+        onCreated={(product) => {
+          const posProduct = toPosProduct(product)
+          setCatalog((current) => {
+            if (current.some((item) => item.id === posProduct.id)) {
+              return current.map((item) => (item.id === posProduct.id ? posProduct : item))
+            }
+            return [posProduct, ...current]
+          })
+          addProduct(posProduct)
+        }}
+      />
     </div>
   )
 }

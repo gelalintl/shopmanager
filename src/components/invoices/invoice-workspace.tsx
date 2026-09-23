@@ -17,7 +17,7 @@ const tabs: { id: InvoiceTab; label: string }[] = [
   { id: 'pending', label: 'En attente' },
   { id: 'cancellations', label: 'Demandes d’annulation' },
   { id: 'paid', label: 'Payées' },
-  { id: 'drafts', label: 'Brouillons' },
+  { id: 'drafts', label: 'Proformas' },
 ]
 
 type InvoiceWorkspaceProps = {
@@ -119,7 +119,7 @@ export function InvoiceWorkspace({
         </div>
         <div className="flex gap-2">
           <Link href="/dashboard/invoices/new?kind=estimation">
-            <Button variant="outline">Nouveau devis</Button>
+            <Button variant="outline">Nouveau devis / Proforma</Button>
           </Link>
           <Link href="/dashboard/invoices/new?kind=invoice">
             <Button>Nouvelle facture</Button>
@@ -136,8 +136,9 @@ export function InvoiceWorkspace({
         onChange={handleFilters}
       />
 
-      <InvoiceTable documents={documents} />
       <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
+      <InvoiceTable documents={documents} />
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} persistSize={false} />
     </section>
   )
 }

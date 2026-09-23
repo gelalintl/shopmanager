@@ -30,7 +30,7 @@ export type PaymentReceipt = {
   invoiceCode: string
   estimationPublicId: string
   customerName: string
-  customerAddress: string
+  customerAddress: string | null
   customerPhone: string | null
   companyName: string
   companyAddress: string
@@ -52,6 +52,8 @@ export type PaymentJournalFilters = {
   to?: string
   customerPublicId?: string
   paymentMethod?: PaymentMethodFilter
+  sort?: string
+  dir?: string
 }
 
 export const PAYMENT_METHODS: PaymentMethod[] = [

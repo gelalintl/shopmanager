@@ -69,8 +69,9 @@ export function PaymentJournal({
           })
         }}
       />
-      <PaymentTable entries={entries} />
       <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
+      <PaymentTable entries={entries} />
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} persistSize={false} />
     </section>
   )
 }

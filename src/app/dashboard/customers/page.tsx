@@ -18,7 +18,7 @@ const TYPES: CustomerTypeFilter[] = ['all', 'COMPANY', 'INDIVIDUAL']
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; limit?: string; q?: string; type?: string }>
+  searchParams: Promise<{ page?: string; limit?: string; q?: string; type?: string; sort?: string; dir?: string }>
 }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
@@ -30,6 +30,8 @@ export default async function CustomersPage({
   const result = await getCustomers(parsePage(params.page), parseLimit(params.limit), {
     q: params.q,
     type,
+    sort: params.sort,
+    dir: params.dir,
   })
 
   return (

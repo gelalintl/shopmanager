@@ -28,6 +28,8 @@ export default async function PaymentsPage({
     to?: string
     customerId?: string
     method?: string
+    sort?: string
+    dir?: string
   }>
 }) {
   const session = await auth()
@@ -42,6 +44,8 @@ export default async function PaymentsPage({
       to: params.to,
       customerPublicId: params.customerId,
       paymentMethod,
+      sort: params.sort,
+      dir: params.dir,
     },
     parsePage(params.page),
     limit,

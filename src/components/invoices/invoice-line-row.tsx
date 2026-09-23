@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { controlClass } from '@/components/ui/input'
-import { IconTrash } from '@/components/ui/icons'
+import { IconPlus, IconTrash } from '@/components/ui/icons'
 import { ProductCombobox, type Product } from '@/components/invoices/product-combobox'
 import { type InvoiceItem } from '@/lib/invoices'
 import { cn } from '@/lib/cn'
@@ -11,6 +11,7 @@ type InvoiceLineRowProps = {
   line: InvoiceItem
   onChange: (key: string, patch: Partial<InvoiceItem>) => void
   onSelectProduct: (key: string, product: Product) => void
+  onQuickAdd: (key: string) => void
   onRemove: (key: string) => void
 }
 
@@ -18,16 +19,28 @@ export const InvoiceLineRow = memo(function InvoiceLineRow({
   line,
   onChange,
   onSelectProduct,
+  onQuickAdd,
   onRemove,
 }: InvoiceLineRowProps) {
   return (
     <tr className="border-b border-subtle-border/70">
       <td className="min-w-0 py-2 pr-2 align-middle">
-        <ProductCombobox
-          value={line.query}
-          onQueryChange={(query) => onChange(line.key, { query, productId: null, designation: query })}
-          onSelect={(product) => onSelectProduct(line.key, product)}
-        />
+        <div className="flex items-center gap-1">
+          <ProductCombobox
+            value={line.query}
+            onQueryChange={(query) => onChange(line.key, { query, productId: null, designation: query })}
+            onSelect={(product) => onSelectProduct(line.key, product)}
+          />
+          <button
+            type="button"
+            title="Nouveau produit rapide"
+            aria-label="Nouveau produit rapide"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+            onClick={() => onQuickAdd(line.key)}
+          >
+            <IconPlus className="h-4 w-4" />
+          </button>
+        </div>
       </td>
       <td className="w-16 py-2 pr-2 align-middle">
         <input

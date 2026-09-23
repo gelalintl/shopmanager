@@ -17,7 +17,7 @@ const STOCK: StockFilter[] = ['all', 'ok', 'low', 'out']
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; limit?: string; q?: string; stock?: string }>
+  searchParams: Promise<{ page?: string; limit?: string; q?: string; stock?: string; sort?: string; dir?: string }>
 }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
@@ -29,6 +29,8 @@ export default async function ProductsPage({
   const result = await getProducts(parsePage(params.page), parseLimit(params.limit), {
     q: params.q,
     stock,
+    sort: params.sort,
+    dir: params.dir,
   })
 
   return (

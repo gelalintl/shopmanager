@@ -15,6 +15,11 @@ import {
 } from '@/lib/payments'
 import { invoiceSettlement, parsePrintSettings } from '@/lib/invoices'
 import { paginationMeta, parseLimit, parsePage } from '@/lib/pagination'
+import {
+  parseSortDir,
+  parseSortKey,
+  PAYMENT_SORTS,
+} from '@/lib/table-sort'
 import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
 import { MANAGER_ROLES } from '@/lib/auth'
 
@@ -229,6 +234,8 @@ export async function getPaymentsJournal(
   if (!ctx.ok) return empty
 
   const companyId = ctx.user.companyId
+  const sort = parseSortKey(filters.sort, PAYMENT_SORTS, 'date')
+  const dir = parseSortDir(filters.dir, 'desc')
   const method = filters.paymentMethod && filters.paymentMethod !== 'all'
     ? parsePaymentMethod(filters.paymentMethod)
     : undefined
@@ -272,7 +279,18 @@ export async function getPaymentsJournal(
           },
         },
       },
-      orderBy: { paymentDate: 'desc' },
+      orderBy:
+        sort === 'invoice'
+          ? { invoice: { code: dir } }
+          : sort === 'customer'
+            ? { invoice: { customer: { name: dir } } }
+            : sort === 'method'
+              ? { paymentMethod: dir }
+              : sort === 'amount'
+                ? { amount: dir }
+                : sort === 'agent'
+                  ? { collector: { name: dir } }
+                  : { paymentDate: dir },
       skip: meta.skip,
       take: meta.take,
     }),

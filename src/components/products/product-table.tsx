@@ -6,11 +6,12 @@ import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
 import { InputField } from '@/components/ui/input'
 import { IconPackagePlus, IconPencil, IconTrash } from '@/components/ui/icons'
+import { SortableHeader } from '@/components/ui/sortable-header'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
-import { deleteProduct, restockProduct } from '@/app/dashboard/products/actions'
+import { deleteProduct, restockProduct, adjustStock } from '@/app/dashboard/products/actions'
 import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { cn } from '@/lib/cn'
-import { formatCfa, getStockStatus, type ProductListItem } from '@/lib/products'
+import { formatCfa, getStockStatus, isServiceProduct, type ProductListItem } from '@/lib/products'
 import { toastResult } from '@/lib/notify'
 import { toast } from 'sonner'
 
@@ -31,7 +32,7 @@ const iconBtn =
 export function ProductTable({ products, onEdit }: ProductTableProps) {
   const [restocking, setRestocking] = useState<ProductListItem | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
-  const { runRestricted, modal } = useRestrictedAction()
+  const { isManager, runRestricted, modal } = useRestrictedAction()
 
   function handleDelete(product: ProductListItem) {
     void runRestricted({
@@ -56,9 +57,9 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
           <table className="min-w-full text-left">
             <thead className="border-b border-subtle-border bg-powder/80">
               <tr>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Désignation / Référence</th>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Prix unitaire</th>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Quantité en stock</th>
+                <SortableHeader sortKey="name" label="Désignation / Référence" fallbackKey="name" fallbackDir="asc" />
+                <SortableHeader sortKey="price" label="Prix unitaire" fallbackKey="name" fallbackDir="asc" initialDir="desc" />
+                <SortableHeader sortKey="stock" label="Quantité en stock" fallbackKey="name" fallbackDir="asc" initialDir="desc" />
                 <th className="w-36 px-3 py-3 text-sm font-bold text-foreground-muted">Actions</th>
               </tr>
             </thead>
@@ -71,6 +72,7 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                 </tr>
               ) : (
                 products.map((product) => {
+                  const service = isServiceProduct(product.type)
                   const status = getStockStatus(product.quantity, product.alertThreshold)
                   const badge = stockBadge[status]
 
@@ -81,17 +83,26 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                           {product.designation}
                         </Text>
                         <Caption className="mt-0.5 block">{product.code}</Caption>
+                        {service ? (
+                          <Caption className="mt-0.5 block text-cobalt">Prestation</Caption>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">{formatCfa(product.unitPrice)}</td>
                       <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            'inline-flex items-center rounded-full px-2.5 py-1 text-sm font-bold',
-                            badge.className,
-                          )}
-                        >
-                          {product.quantity} · {badge.label}
-                        </span>
+                        {service ? (
+                          <span className="inline-flex items-center rounded-full bg-soft-cobalt px-2.5 py-1 text-sm font-bold text-cobalt">
+                            Service
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-full px-2.5 py-1 text-sm font-bold',
+                              badge.className,
+                            )}
+                          >
+                            {product.quantity} · {badge.label}
+                          </span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 align-middle">
                         <div className="flex items-center gap-1">
@@ -104,15 +115,17 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                           >
                             <IconPencil className="h-4 w-4" />
                           </button>
-                          <button
-                            type="button"
-                            title="Réapprovisionner le stock"
-                            aria-label="Réapprovisionner le stock"
-                            className={cn(iconBtn, 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700')}
-                            onClick={() => setRestocking(product)}
-                          >
-                            <IconPackagePlus className="h-4 w-4" />
-                          </button>
+                          {!service ? (
+                            <button
+                              type="button"
+                              title={isManager ? 'Rectifier le stock' : 'Réapprovisionner le stock'}
+                              aria-label={isManager ? 'Rectifier le stock' : 'Réapprovisionner le stock'}
+                              className={cn(iconBtn, 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700')}
+                              onClick={() => setRestocking(product)}
+                            >
+                              <IconPackagePlus className="h-4 w-4" />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             title="Supprimer le produit"
@@ -135,7 +148,7 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
       </Card>
 
       {restocking ? (
-        <RestockDialog product={restocking} onClose={() => setRestocking(null)} />
+        <RestockDialog product={restocking} isManager={isManager} onClose={() => setRestocking(null)} />
       ) : null}
       {modal}
     </>
@@ -144,9 +157,11 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
 
 function RestockDialog({
   product,
+  isManager,
   onClose,
 }: {
   product: ProductListItem
+  isManager: boolean
   onClose: () => void
 }) {
   const [loading, setLoading] = useState(false)
@@ -155,22 +170,26 @@ function RestockDialog({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const quantity = Number(new FormData(event.currentTarget).get('quantity'))
-    if (!Number.isFinite(quantity) || quantity < 1) {
+    if (!Number.isFinite(quantity) || quantity < (isManager ? 0 : 1)) {
       toast.error('Saisissez une quantité valide.')
       return
     }
 
     const confirmed = await confirm({
-      title: 'Réapprovisionner le stock',
-      description: `Ajouter ${quantity} unité(s) à « ${product.designation} » ?`,
+      title: isManager ? 'Rectifier le stock' : 'Réapprovisionner le stock',
+      description: isManager
+        ? `Fixer le stock de « ${product.designation} » à ${quantity} unité(s) ? Un mouvement d’ajustement d’inventaire sera enregistré.`
+        : `Ajouter ${quantity} unité(s) à « ${product.designation} » ?`,
       confirmLabel: 'Confirmer',
     })
     if (!confirmed) return
 
     setLoading(true)
-    const result = await restockProduct({ publicId: product.publicId, quantity })
+    const result = isManager
+      ? await adjustStock({ publicId: product.publicId, quantity })
+      : await restockProduct({ publicId: product.publicId, quantity })
     setLoading(false)
-    if (!toastResult(result, 'Stock ajusté.')) return
+    if (!toastResult(result, isManager ? 'Stock rectifié.' : 'Stock ajusté.')) return
     onClose()
   }
 
@@ -178,16 +197,18 @@ function RestockDialog({
     <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
       <button type="button" className="absolute inset-0 bg-slate-900/30" aria-label="Fermer" onClick={onClose} />
       <Card className="relative w-full max-w-sm p-6">
-        <Text weight="bold">Réapprovisionner {product.designation}</Text>
+        <Text weight="bold">
+          {isManager ? 'Rectifier le stock' : 'Réapprovisionner'} {product.designation}
+        </Text>
         <form onSubmit={handleSubmit} className="mt-2">
           <InputField
             id="quantity"
             name="quantity"
-            label="Quantité"
+            label={isManager ? 'Nouvelle quantité en stock' : 'Quantité à ajouter'}
             type="number"
-            min={1}
+            min={isManager ? 0 : 1}
             step={1}
-            defaultValue={1}
+            defaultValue={isManager ? product.quantity : 1}
             required
           />
           <div className="mt-4 flex gap-3">

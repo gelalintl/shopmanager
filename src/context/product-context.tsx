@@ -20,6 +20,7 @@ type ProductContextValue = {
   products: ProductSelectItem[]
   isLoading: boolean
   refreshProducts: () => Promise<void>
+  upsertProduct: (product: ProductSelectItem) => void
 }
 
 const ProductContext = createContext<ProductContextValue | null>(null)
@@ -40,13 +41,25 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const upsertProduct = useCallback((product: ProductSelectItem) => {
+    setProducts((current) => {
+      const index = current.findIndex((item) => item.id === product.id)
+      if (index === -1) {
+        return [...current, product].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+      }
+      const next = [...current]
+      next[index] = product
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     void refreshProducts()
   }, [refreshProducts])
 
   const value = useMemo(
-    () => ({ products, isLoading, refreshProducts }),
-    [products, isLoading, refreshProducts],
+    () => ({ products, isLoading, refreshProducts, upsertProduct }),
+    [products, isLoading, refreshProducts, upsertProduct],
   )
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>

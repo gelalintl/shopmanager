@@ -116,7 +116,6 @@ function CustomerModalForm({
             name="name"
             label={kind === 'COMPANY' ? 'Raison sociale' : 'Nom'}
             required
-            minLength={3}
             defaultValue={customer?.name ?? ''}
             placeholder={kind === 'COMPANY' ? 'Raison sociale' : 'Nom du client'}
           />
@@ -133,7 +132,6 @@ function CustomerModalForm({
             id="phone"
             name="phone"
             label="Téléphone"
-            required
             inputMode="numeric"
             defaultValue={customer?.phone ?? ''}
             placeholder="Téléphone"
@@ -150,7 +148,6 @@ function CustomerModalForm({
             id="address"
             name="address"
             label="Adresse physique"
-            required
             defaultValue={customer?.address ?? ''}
             placeholder="Adresse"
           />

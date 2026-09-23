@@ -10,7 +10,14 @@ import { StatsCard } from '@/components/dashboard/stats-card'
 import { CustomerModal } from '@/components/customers/customer-modal'
 import { PaymentDialog } from '@/components/payments/payment-dialog'
 import { kindLabel, type CustomerDetails } from '@/lib/customers'
-import { formatCfa, formatFrDate, statusClass, statusLabels, type DocumentListItem } from '@/lib/invoices'
+import {
+  documentKindLabel,
+  documentStatusLabel,
+  formatCfa,
+  formatFrDate,
+  statusClass,
+  type DocumentListItem,
+} from '@/lib/invoices'
 import { cn } from '@/lib/cn'
 
 type CustomerProfileProps = {
@@ -40,8 +47,9 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
             </Heading>
             <div className="mt-3 space-y-1">
               <Text>
-                {customer.postBox ? `BP ${customer.postBox}, ` : ''}
-                {customer.address}
+                {customer.postBox ? `BP ${customer.postBox}` : ''}
+                {customer.postBox && customer.address ? ', ' : ''}
+                {customer.address || (customer.postBox ? '' : '—')}
               </Text>
               <Text>Tél. {customer.phone || '—'}</Text>
               {customer.email ? <Text>Email {customer.email}</Text> : null}
@@ -116,14 +124,14 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
                       >
                         {doc.code}
                       </Link>
-                      <Caption className="block">{doc.kind === 'INVOICE' ? 'Facture' : 'Devis'}</Caption>
+                      <Caption className="block">{documentKindLabel(doc.kind, doc.status)}</Caption>
                     </td>
                     <td className="px-4 py-3 align-middle whitespace-nowrap">
                       {formatFrDate(doc.createdAt)}
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[doc.status])}>
-                        {statusLabels[doc.status]}
+                        {documentStatusLabel(doc.status, doc.kind)}
                       </span>
                     </td>
                     <td className="px-4 py-3 align-middle whitespace-nowrap">{formatCfa(doc.totalTtc)}</td>

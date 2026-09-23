@@ -76,6 +76,7 @@ export function CustomerCatalog({
         </Button>
       </div>
 
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
       <CustomerTable
         customers={customers}
         onEdit={(item) => {
@@ -83,7 +84,7 @@ export function CustomerCatalog({
           setModalOpen(true)
         }}
       />
-      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} persistSize={false} />
 
       <CustomerModal
         open={modalOpen}

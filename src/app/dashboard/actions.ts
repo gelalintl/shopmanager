@@ -99,7 +99,7 @@ export async function getDashboardAnalytics(period: DashboardPeriod | string = '
       where: {
         companyId,
         invoice: { is: null },
-        status: { in: ['DRAFT', 'SENT', 'ON_GOING'] },
+        status: { in: ['DRAFT', 'SENT', 'ON_GOING', 'PROFORMA', 'QUOTE'] },
       },
       select: { totalAmount: true },
     }),

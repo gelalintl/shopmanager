@@ -22,6 +22,9 @@ function matchesQuery(product: Product, query: string) {
 }
 
 function optionLabel(product: Product) {
+  if (product.type === 'PRESTATION') {
+    return `[${product.code}] ${product.name} — ${formatCfa(product.unitPrice)} (Prestation)`
+  }
   return `[${product.code}] ${product.name} — ${formatCfa(product.unitPrice)} (Stock disponible : ${product.stock})`
 }
 

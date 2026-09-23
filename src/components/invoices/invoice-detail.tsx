@@ -13,10 +13,13 @@ import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-n
 import {
   cancelInvoice,
   convertEstimationToInvoice,
+  convertProformaToQuote,
   duplicateDocument,
   reviewInvoiceCancellation,
   updateEstimationStatus,
 } from '@/app/dashboard/invoices/actions'
+import { BackToListButton } from '@/components/ui/back-button'
+import { QuoteCancelModal } from '@/components/invoices/quote-cancel-modal'
 import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toastResult } from '@/lib/notify'
@@ -28,10 +31,17 @@ import {
   CancellationRequestModal,
 } from '@/components/invoices/cancellation-request-modal'
 import {
+  canCancelEstimation,
+  canConvertProformaToQuote,
+  canConvertQuoteToInvoice,
+  documentKindLabel,
+  documentPrintHref,
+  documentStatusLabel,
   formatCfa,
   formatFrDate,
+  isProformaStatus,
+  isQuoteStatus,
   statusClass,
-  statusLabels,
   type DocumentKind,
   type DocumentStatus,
   type DocumentTotals,
@@ -89,6 +99,8 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
   const [convertOpen, setConvertOpen] = useState(false)
   const [creditOpen, setCreditOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [quoteCancelOpen, setQuoteCancelOpen] = useState(false)
+  const [convertingQuote, setConvertingQuote] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const progress = props.totals.ttc > 0 ? Math.min(100, Math.round((props.paidAmount / props.totals.ttc) * 100)) : 0
   const { runRestricted, modal } = useRestrictedAction()
@@ -100,6 +112,15 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
     const result = await duplicateDocument(props.estimationPublicId)
     if (toastResult(result, 'Document dupliqué.')) {
       if (result.publicId) router.push(`/dashboard/invoices/${result.publicId}`)
+      router.refresh()
+    }
+  }
+
+  async function handleConvertToQuote() {
+    setConvertingQuote(true)
+    const result = await convertProformaToQuote({ estimationPublicId: props.estimationPublicId })
+    setConvertingQuote(false)
+    if (toastResult(result, 'Proforma convertie en devis.')) {
       router.refresh()
     }
   }
@@ -145,8 +166,10 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <Caption className="uppercase tracking-wide">{props.kind === 'INVOICE' ? 'Facture' : 'Devis'}</Caption>
+        <div className="flex items-start gap-3">
+          <BackToListButton className="mt-1" />
+          <div>
+          <Caption className="uppercase tracking-wide">{documentKindLabel(props.kind, props.status)}</Caption>
           <Heading as="h2" size="xl">{props.code}</Heading>
           {props.status === 'PENDING_CANCELLATION' ? (
             <span className="ml-2">
@@ -154,7 +177,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
             </span>
           ) : (
             <span className={cn('mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[props.status])}>
-              {statusLabels[props.status]}
+              {documentStatusLabel(props.status, props.kind)}
             </span>
           )}
           {creditNotes.length > 0 ? (
@@ -162,25 +185,43 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
               <CreditNoteBadge count={creditNotes.length} href="#avoirs" />
             </span>
           ) : null}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/dashboard/invoices/${props.estimationPublicId}/print`} target="_blank">
-            <Button variant="outline">Imprimer</Button>
+          <Link href={documentPrintHref(props.kind, props.estimationPublicId)} target="_blank">
+            <Button variant="outline">
+              {props.kind === 'INVOICE'
+                ? 'Imprimer'
+                : isProformaStatus(props.status)
+                  ? 'Imprimer la proforma'
+                  : 'Imprimer le devis'}
+            </Button>
           </Link>
-          <Link href={`/dashboard/invoices/${props.estimationPublicId}/print?download=1`} target="_blank">
+          <Link href={`${documentPrintHref(props.kind, props.estimationPublicId)}?download=1`} target="_blank">
             <Button variant="secondary">Télécharger PDF</Button>
           </Link>
-          {props.kind === 'ESTIMATION' && (props.status === 'DRAFT' || props.status === 'REJECTED') ? (
-            <Button variant="outline" onClick={() => handleStatus('SENT')}>Marquer envoyé</Button>
+          {props.kind === 'ESTIMATION' && canConvertProformaToQuote(props.status) ? (
+            <Button isLoading={convertingQuote} onClick={() => void handleConvertToQuote()}>
+              Convertir en Devis
+            </Button>
           ) : null}
-          {props.kind === 'ESTIMATION' && props.status === 'SENT' ? (
+          {props.kind === 'ESTIMATION' && isQuoteStatus(props.status) ? (
             <>
-              <Button variant="secondary" onClick={() => handleStatus('ACCEPTED')}>Accepter</Button>
-              <Button variant="danger" onClick={() => handleStatus('REJECTED')}>Refuser</Button>
+              {props.status === 'QUOTE' || props.status === 'SENT' ? (
+                <>
+                  <Button variant="secondary" onClick={() => handleStatus('ACCEPTED')}>Accepter</Button>
+                  <Button variant="danger" onClick={() => handleStatus('REJECTED')}>Refuser</Button>
+                </>
+              ) : null}
+              {canConvertQuoteToInvoice(props.status) ? (
+                <Button onClick={() => setConvertOpen(true)}>Transformer en Facture</Button>
+              ) : null}
             </>
           ) : null}
-          {props.kind === 'ESTIMATION' && props.status !== 'INVOICED' && props.status !== 'CANCELED' && props.status !== 'REJECTED' ? (
-            <Button onClick={() => setConvertOpen(true)}>Convertir</Button>
+          {props.kind === 'ESTIMATION' && canCancelEstimation(props.status) ? (
+            <Button variant="danger" onClick={() => setQuoteCancelOpen(true)}>
+              {isProformaStatus(props.status) ? 'Annuler la proforma' : 'Annuler le devis'}
+            </Button>
           ) : null}
           {props.invoicePublicId && props.status !== 'PAID' && props.status !== 'CANCELED' && !pendingCancel ? (
             <Button variant="secondary" onClick={() => setPayOpen(true)}>Enregistrer un paiement</Button>
@@ -233,6 +274,13 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
         <Card className="border border-red-200 bg-red-50 p-5">
           <Text weight="bold" className="text-red-800">Demande d’annulation en attente</Text>
           <Caption className="mt-1 block text-red-700">Motif : {props.cancelReason}</Caption>
+        </Card>
+      ) : null}
+
+      {props.kind === 'ESTIMATION' && props.status === 'CANCELED' && props.notes ? (
+        <Card className="border border-slate-200 bg-powder p-5">
+          <Text weight="bold">Proforma annulée</Text>
+          <Caption className="mt-1 block">{props.notes}</Caption>
         </Card>
       ) : null}
 
@@ -316,6 +364,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
             settings={props.settings}
             paidAmount={props.paidAmount}
             notes={props.notes}
+            status={props.status}
             validityDays={props.kind === 'ESTIMATION' ? props.validityDays : undefined}
             validUntil={props.kind === 'ESTIMATION' ? props.validUntil : null}
           />
@@ -323,7 +372,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
       </div>
 
       {convertOpen ? (
-        <ActionModal title="Convertir en facture" onClose={() => setConvertOpen(false)}>
+        <ActionModal title="Transformer en facture" onClose={() => setConvertOpen(false)}>
           <form
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault()
@@ -348,7 +397,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
               </select>
             </label>
             <InputField id="depositValue" name="depositValue" label="Valeur" type="number" min={0} defaultValue={0} />
-            <Button type="submit" className="mt-4 w-full">Convertir</Button>
+            <Button type="submit" className="mt-4 w-full">Transformer en Facture</Button>
           </form>
         </ActionModal>
       ) : null}
@@ -388,6 +437,18 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
           onClose={() => setCancelOpen(false)}
           onDone={() => {
             setCancelOpen(false)
+            router.refresh()
+          }}
+        />
+      ) : null}
+      {quoteCancelOpen ? (
+        <QuoteCancelModal
+          open
+          estimationPublicId={props.estimationPublicId}
+          code={props.code}
+          onClose={() => setQuoteCancelOpen(false)}
+          onDone={() => {
+            setQuoteCancelOpen(false)
             router.refresh()
           }}
         />

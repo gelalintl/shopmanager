@@ -2,11 +2,13 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { BackToListButton } from '@/components/ui/back-button'
 import { Button } from '@/components/ui/button'
 import { InputField, controlClass, quietControlClass } from '@/components/ui/input'
 import { Caption, Heading } from '@/components/ui/typography'
 import { CustomerModal } from '@/components/customers/customer-modal'
 import { InvoiceLineRow } from '@/components/invoices/invoice-line-row'
+import { QuickProductModal } from '@/components/invoices/quick-product-modal'
 import { InvoicePrintTemplate } from '@/components/invoices/invoice-print-template'
 import { createDocument } from '@/app/dashboard/invoices/actions'
 import { toastResult } from '@/lib/notify'
@@ -66,6 +68,7 @@ export function InvoiceBuilder({
   const [dueDate, setDueDate] = useState('')
   const [lines, setLines] = useState<InvoiceItem[]>([emptyLine()])
   const [customerOpen, setCustomerOpen] = useState(false)
+  const [quickLineKey, setQuickLineKey] = useState<string | null>(null)
   const [extraCustomers, setExtraCustomers] = useState<CatalogCustomer[]>([])
   const [loading, setLoading] = useState<'draft' | 'official' | null>(null)
 
@@ -156,7 +159,7 @@ export function InvoiceBuilder({
           : 'Brouillon enregistré.'
         : official
           ? 'Devis créé.'
-          : 'Brouillon enregistré.'
+          : 'Proforma enregistrée.'
     if (!toastResult(result, success)) return
     router.push(result.publicId ? `/dashboard/invoices/${result.publicId}` : '/dashboard/invoices')
     router.refresh()
@@ -165,9 +168,12 @@ export function InvoiceBuilder({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_210mm]">
       <section className="rounded-2xl border border-subtle-border bg-white p-5 shadow-sm">
-        <Heading as="h2" size="lg">
-          {kind === 'INVOICE' ? 'Nouvelle facture' : 'Nouveau devis'}
-        </Heading>
+        <div className="flex items-center gap-3">
+          <BackToListButton />
+          <Heading as="h2" size="lg">
+            {kind === 'INVOICE' ? 'Nouvelle facture' : 'Nouveau devis / Proforma'}
+          </Heading>
+        </div>
 
         <div className="mt-4 rounded-xl border border-subtle-border/80 bg-powder/50 p-4">
           <Caption className="uppercase tracking-wide">Informations générales</Caption>
@@ -291,6 +297,7 @@ export function InvoiceBuilder({
                   line={line}
                   onChange={updateLine}
                   onSelectProduct={selectProduct}
+                  onQuickAdd={setQuickLineKey}
                   onRemove={removeLine}
                 />
               ))}
@@ -312,7 +319,7 @@ export function InvoiceBuilder({
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Button type="button" variant="outline" isLoading={loading === 'draft'} onClick={() => save(false)}>
-            Enregistrer brouillon
+            {kind === 'INVOICE' ? 'Enregistrer brouillon' : 'Enregistrer la proforma'}
           </Button>
           <Button type="button" isLoading={loading === 'official'} onClick={() => save(true)}>
             Émettre {kind === 'INVOICE' ? 'la facture' : 'le devis'}
@@ -324,6 +331,7 @@ export function InvoiceBuilder({
         <div className="origin-top scale-[0.82]">
           <InvoicePrintTemplate
             kind={kind}
+            status={kind === 'INVOICE' ? undefined : 'PROFORMA'}
             code={previewCode}
             dateLabel={`Niamey, le ${formatFrDate(issueDate)}`}
             company={company}
@@ -348,6 +356,14 @@ export function InvoiceBuilder({
             ...current.filter((item) => item.publicId !== snapshot.publicId),
           ])
           setCustomerId(snapshot.publicId)
+        }}
+      />
+      <QuickProductModal
+        open={Boolean(quickLineKey)}
+        initialName={lines.find((line) => line.key === quickLineKey)?.query ?? ''}
+        onClose={() => setQuickLineKey(null)}
+        onCreated={(product) => {
+          if (quickLineKey) selectProduct(quickLineKey, product)
         }}
       />
     </div>

@@ -46,7 +46,7 @@ export function PaymentReceiptTemplate({ receipt, className }: PaymentReceiptTem
       <section className="mt-6 rounded-xl border border-subtle-border p-4" style={{ background: 'var(--print-accent-soft)' }}>
         <p className="text-xs font-bold tracking-wide text-foreground-muted uppercase">Reçu de</p>
         <p className="mt-1 text-base font-bold">{receipt.customerName}</p>
-        <p>{receipt.customerAddress}</p>
+        {receipt.customerAddress ? <p>{receipt.customerAddress}</p> : null}
         {receipt.customerPhone ? <p>Tél. {receipt.customerPhone}</p> : null}
       </section>
 

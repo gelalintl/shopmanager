@@ -11,8 +11,10 @@ import { InputField } from '@/components/ui/input'
 import {
   cancelInvoice,
   convertEstimationToInvoice,
+  convertProformaToQuote,
   reviewInvoiceCancellation,
 } from '@/app/dashboard/invoices/actions'
+import { QuoteCancelModal } from '@/components/invoices/quote-cancel-modal'
 import { PaymentDialog } from '@/components/payments/payment-dialog'
 import { CreditNoteBadge, CreditNoteModal } from '@/components/invoices/credit-note-modal'
 import {
@@ -24,12 +26,20 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toastResult } from '@/lib/notify'
 import { toast } from 'sonner'
 import {
+  canCancelEstimation,
+  canConvertProformaToQuote,
+  canConvertQuoteToInvoice,
+  documentKindLabel,
+  documentPrintHref,
+  documentStatusLabel,
   formatCfa,
+  formatFrDate,
+  isProformaStatus,
   statusClass,
-  statusLabels,
   type DocumentListItem,
 } from '@/lib/invoices'
 import { cn } from '@/lib/cn'
+import { SortableHeader } from '@/components/ui/sortable-header'
 import {
   IconArrowRightLeft,
   IconBan,
@@ -49,10 +59,12 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
   const router = useRouter()
   const { data: session } = useSession()
   const isManager = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
+  const [quotePromoteId, setQuotePromoteId] = useState<string | null>(null)
   const [convertId, setConvertId] = useState<string | null>(null)
   const [payId, setPayId] = useState<string | null>(null)
   const [creditDoc, setCreditDoc] = useState<DocumentListItem | null>(null)
   const [cancelDoc, setCancelDoc] = useState<DocumentListItem | null>(null)
+  const [quoteCancelDoc, setQuoteCancelDoc] = useState<DocumentListItem | null>(null)
   const [reviewId, setReviewId] = useState<string | null>(null)
   const { runRestricted, modal } = useRestrictedAction()
   const { confirm, dialog } = useConfirmDialog()
@@ -86,21 +98,22 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
     <>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] table-fixed text-left">
+          <table className="w-full min-w-[48rem] table-fixed text-left">
             <thead className="border-b border-subtle-border bg-powder/80">
               <tr>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Référence</th>
-                <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Client</th>
-                <th className="w-32 px-4 py-3 text-sm font-bold text-foreground-muted">Statut</th>
-                <th className="w-36 px-4 py-3 text-sm font-bold text-foreground-muted">TTC</th>
-                <th className="w-36 px-4 py-3 text-sm font-bold text-foreground-muted">Reste</th>
+                <SortableHeader sortKey="code" label="Référence" fallbackKey="date" fallbackDir="desc" />
+                <SortableHeader className="w-32" sortKey="date" label="Date" fallbackKey="date" fallbackDir="desc" initialDir="desc" />
+                <SortableHeader sortKey="customer" label="Client" fallbackKey="date" fallbackDir="desc" />
+                <SortableHeader className="w-32" sortKey="status" label="Statut" fallbackKey="date" fallbackDir="desc" />
+                <SortableHeader className="w-36" sortKey="amount" label="TTC" fallbackKey="date" fallbackDir="desc" initialDir="desc" />
+                <SortableHeader className="w-36" sortKey="remaining" label="Reste" fallbackKey="date" fallbackDir="desc" initialDir="desc" />
                 <th className="w-40 px-3 py-3 text-sm font-bold text-foreground-muted">Actions</th>
               </tr>
             </thead>
             <tbody>
               {documents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center">
+                  <td colSpan={7} className="px-4 py-10 text-center">
                     <Text variant="muted">Aucun document pour cet onglet.</Text>
                   </td>
                 </tr>
@@ -109,13 +122,16 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                   <tr key={`${doc.kind}-${doc.publicId}`} className="border-b border-subtle-border last:border-0">
                     <td className="overflow-hidden px-4 py-3 align-middle">
                       <Text weight="bold" className="truncate">{doc.code}</Text>
-                      <Caption className="block">{doc.kind === 'INVOICE' ? 'Facture' : 'Devis'}</Caption>
+                      <Caption className="block">{documentKindLabel(doc.kind, doc.status)}</Caption>
                       {doc.kind === 'INVOICE' ? (
                         <CreditNoteBadge
                           count={doc.creditNoteCount}
                           href={`/dashboard/invoices/${doc.estimationPublicId}#avoirs`}
                         />
                       ) : null}
+                    </td>
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      {formatFrDate(doc.createdAt)}
                     </td>
                     <td className="overflow-hidden px-4 py-3 align-middle">
                       <span className="block truncate">{doc.customerName}</span>
@@ -125,7 +141,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                         <CancellationRequestBadge reason={doc.cancelReason} />
                       ) : (
                         <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-bold', statusClass[doc.status])}>
-                          {statusLabels[doc.status]}
+                          {documentStatusLabel(doc.status, doc.kind)}
                         </span>
                       )}
                     </td>
@@ -142,23 +158,57 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                           <IconEye className="h-4 w-4" />
                         </Link>
                         <Link
-                          href={`/dashboard/invoices/${doc.estimationPublicId}/print`}
+                          href={documentPrintHref(doc.kind, doc.estimationPublicId)}
                           target="_blank"
-                          title="Imprimer"
-                          aria-label="Imprimer"
+                          title={doc.kind === 'ESTIMATION' ? (isProformaStatus(doc.status) ? 'Imprimer la proforma' : 'Imprimer le devis') : 'Imprimer la facture'}
+                          aria-label={doc.kind === 'ESTIMATION' ? (isProformaStatus(doc.status) ? 'Imprimer la proforma' : 'Imprimer le devis') : 'Imprimer la facture'}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
                         >
                           <IconPrinter className="h-4 w-4" />
                         </Link>
-                        {doc.kind === 'ESTIMATION' && doc.status !== 'INVOICED' && doc.status !== 'CANCELED' && doc.status !== 'REJECTED' ? (
+                        {doc.kind === 'ESTIMATION' && canConvertProformaToQuote(doc.status) ? (
                           <button
                             type="button"
-                            title="Action rapide"
-                            aria-label="Convertir en facture"
+                            title="Convertir en devis"
+                            aria-label="Convertir en devis"
+                            disabled={quotePromoteId === doc.estimationPublicId}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt disabled:opacity-50"
+                            onClick={() => {
+                              void (async () => {
+                                setQuotePromoteId(doc.estimationPublicId)
+                                const result = await convertProformaToQuote({
+                                  estimationPublicId: doc.estimationPublicId,
+                                })
+                                setQuotePromoteId(null)
+                                if (toastResult(result, 'Proforma convertie en devis.')) {
+                                  router.refresh()
+                                }
+                              })()
+                            }}
+                          >
+                            <IconArrowRightLeft className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {doc.kind === 'ESTIMATION' && canConvertQuoteToInvoice(doc.status) ? (
+                          <button
+                            type="button"
+                            title="Transformer en facture"
+                            aria-label="Transformer en facture"
                             className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
                             onClick={() => setConvertId(doc.estimationPublicId)}
                           >
                             <IconArrowRightLeft className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {doc.kind === 'ESTIMATION' && canCancelEstimation(doc.status) ? (
+                          <button
+                            type="button"
+                            title="Annuler le devis / proforma"
+                            aria-label="Annuler le devis / proforma"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 text-red-600 transition-all duration-200 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => setQuoteCancelDoc(doc)}
+                          >
+                            <IconBan className="h-4 w-4" />
                           </button>
                         ) : null}
                         {doc.invoicePublicId && doc.status !== 'PAID' && doc.status !== 'CANCELED' && doc.status !== 'PENDING_CANCELLATION' ? (
@@ -290,6 +340,18 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
           }}
         />
       ) : null}
+      {quoteCancelDoc ? (
+        <QuoteCancelModal
+          open
+          estimationPublicId={quoteCancelDoc.estimationPublicId}
+          code={quoteCancelDoc.code}
+          onClose={() => setQuoteCancelDoc(null)}
+          onDone={() => {
+            setQuoteCancelDoc(null)
+            router.refresh()
+          }}
+        />
+      ) : null}
       {cancelDoc?.invoicePublicId ? (
         <CancellationRequestModal
           open
@@ -336,7 +398,7 @@ function ConvertDialog({
   }
 
   return (
-    <Modal title={`Convertir ${document.code} en facture`} onClose={onClose}>
+    <Modal title={`Transformer ${document.code} en facture`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <label className="mt-2 block text-sm font-bold">
           Acompte
@@ -363,7 +425,7 @@ function ConvertDialog({
         <InputField id="dueDate" name="dueDate" label="Échéance" type="date" />
         <div className="mt-4 flex gap-3">
           <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Annuler</Button>
-          <Button type="submit" className="flex-1" isLoading={loading}>Convertir</Button>
+          <Button type="submit" className="flex-1" isLoading={loading}>Transformer</Button>
         </div>
       </form>
     </Modal>

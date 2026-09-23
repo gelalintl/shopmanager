@@ -5,9 +5,10 @@ import {
   CustomerKind,
   EstimationStatus,
   InvoiceStatus,
-  MovementType,
   PaymentMethod as PrismaPaymentMethod,
   Prisma,
+  ProductType,
+  MovementType,
 } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getTenantContext } from '@/lib/tenant'
@@ -22,6 +23,7 @@ import { parsePaymentMethod, paymentMethodLabels } from '@/lib/payments'
 import { STAFF_ROLES } from '@/lib/auth'
 import { requireRole } from '@/lib/rbac'
 import { issueCreditNote, type CreditNoteInput } from '@/lib/credit-notes'
+import { consumeStockForSale, isServiceProduct, stockFromMovements } from '@/lib/stock'
 import {
   WALK_IN_CUSTOMER_NAME,
   type DirectSaleInput,
@@ -31,29 +33,24 @@ import {
   type PosTicket,
 } from './types'
 
-function stockFromMovements(movements: Array<{ type: MovementType; quantity: number }>) {
-  return movements.reduce(
-    (quantity, movement) =>
-      movement.type === MovementType.IN ? quantity + movement.quantity : quantity - movement.quantity,
-    0,
-  )
-}
-
 function toPosProduct(product: {
   id: number
   publicId: string
   code: string
   designation: string
   unitPrice: bigint
+  type: ProductType | string
   movements: Array<{ type: MovementType; quantity: number }>
 }): PosProduct {
+  const type = product.type === 'PRESTATION' ? 'PRESTATION' : 'MARCHANDISE'
   return {
     id: product.id,
     publicId: product.publicId,
     code: product.code,
     designation: product.designation,
     unitPrice: Number(product.unitPrice),
-    stock: stockFromMovements(product.movements),
+    type,
+    stock: isServiceProduct(type) ? 0 : stockFromMovements(product.movements),
   }
 }
 
@@ -63,6 +60,7 @@ const productStockSelect = {
   code: true,
   designation: true,
   unitPrice: true,
+  type: true,
   movements: {
     where: { isDeleted: false },
     select: { type: true, quantity: true },
@@ -161,7 +159,7 @@ export async function getPosBootstrap(): Promise<PosBootstrap> {
     .filter((product): product is PosProduct => Boolean(product))
 
   if (frequent.length < 12) {
-    for (const product of catalog.filter((item) => item.stock > 0)) {
+    for (const product of catalog.filter((item) => isServiceProduct(item.type) || item.stock > 0)) {
       if (frequent.some((item) => item.id === product.id)) continue
       frequent.push(product)
       if (frequent.length >= 16) break
@@ -272,7 +270,7 @@ export async function processDirectSale(data: DirectSaleInput): Promise<DirectSa
       for (const [productId, quantity] of qtyByProduct) {
         const product = productById.get(productId)
         if (!product) throw new Error('Produit introuvable.')
-        if (product.stock < quantity) {
+        if (!isServiceProduct(product.type) && product.stock < quantity) {
           throw new Error(`Stock insuffisant pour ${product.designation} (disponible : ${product.stock}).`)
         }
       }
@@ -369,20 +367,17 @@ export async function processDirectSale(data: DirectSaleInput): Promise<DirectSa
         },
       })
 
-      for (const item of createdItems) {
-        await tx.stockMovement.create({
-          data: {
-            companyId: ctx.user.companyId,
-            type: MovementType.OUT,
-            quantity: item.quantity,
-            sellingPrice: BigInt(item.unitPrice),
-            productId: item.productId,
-            customerId: customer.id,
-            estimationItemId: item.id,
-            createdById: ctx.user.id,
-          },
-        })
-      }
+      await consumeStockForSale(tx, {
+        companyId: ctx.user.companyId,
+        customerId: customer.id,
+        actorId: ctx.user.id,
+        items: createdItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          estimationItemId: item.id,
+        })),
+      })
 
       return {
         invoicePublicId: invoice.publicId,

@@ -26,6 +26,8 @@ export default async function InvoicesPage({
     kind?: string
     page?: string
     limit?: string
+    sort?: string
+    dir?: string
   }>
 }) {
   const session = await auth()
@@ -45,6 +47,8 @@ export default async function InvoicesPage({
       endDate: params.endDate,
       customerId: params.customerId,
       searchQuery: params.q,
+      sort: params.sort,
+      dir: params.dir,
     },
     parsePage(params.page),
     limit,
@@ -54,7 +58,7 @@ export default async function InvoicesPage({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatsCard title="Chiffre d'affaires facturé" value={formatCfa(result.billed)} hint="Factures émises" />
-        <StatsCard title="Devis en attente" value={String(result.pendingQuotes)} hint="Brouillons, envoyés, acceptés" />
+        <StatsCard title="Devis en attente" value={String(result.pendingQuotes)} hint="Proformas, envoyés, acceptés" />
         <StatsCard title="Reste à recouvrer" value={formatCfa(result.outstanding)} hint="Impayé + acomptes" tone="warning" />
       </div>
       <Suspense fallback={null}>

@@ -17,6 +17,8 @@ import {
   computeTotals,
   formatDocumentCode,
   invoiceSettlement,
+  isProformaStatus,
+  isQuoteStatus,
   normalizeEstimationStatus,
   parseLocalDate,
   resolveInvoiceStatus,
@@ -28,9 +30,20 @@ import {
 } from '@/lib/invoices'
 import { issueCreditNote, type CreditNoteInput } from '@/lib/credit-notes'
 import { paginationMeta, parseLimit, parsePage } from '@/lib/pagination'
+import {
+  compareDate,
+  compareNumber,
+  compareStatus,
+  compareText,
+  DOCUMENT_SORTS,
+  parseSortDir,
+  parseSortKey,
+  sortBy,
+} from '@/lib/table-sort'
 import { authorizeMutation, assertSameCompany, type AdminProof } from '@/lib/rbac'
 import { MANAGER_ROLES, roleAllowed } from '@/lib/auth'
 import { invoiceStatusFromPaid } from '@/lib/payments'
+import { consumeStockForSale } from '@/lib/stock'
 
 const PATH = '/dashboard/invoices'
 type ActionResult =
@@ -39,9 +52,13 @@ type ActionResult =
 
 /** Workflow statuses (schema) — asserted for IDEs still on the old Prisma enum. */
 function estimationStatus(
-  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'CANCELED',
+  status: 'DRAFT' | 'PROFORMA' | 'QUOTE' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED' | 'CANCELED',
 ): EstimationStatus {
   return status as EstimationStatus
+}
+
+function isUnofficialEstimationCode(code: string) {
+  return code.startsWith('DEV-B')
 }
 
 async function restockInvoiceItems(
@@ -252,6 +269,8 @@ export async function getDocuments(
   const createdAt = dateRange(filters.startDate, filters.endDate)
   const includeEstimations = kind !== 'INVOICE'
   const includeInvoices = kind !== 'ESTIMATION'
+  const sort = parseSortKey(filters.sort, DOCUMENT_SORTS, 'date')
+  const dir = parseSortDir(filters.dir, 'desc')
 
   const customerFilter = customerPublicId
     ? { customer: { publicId: customerPublicId, isDeleted: false } }
@@ -261,8 +280,8 @@ export async function getDocuments(
     : {}
 
   const estimationStatusFilter = (): Prisma.EstimationWhereInput => {
-    if (tab === 'drafts') return { status: { in: ['DRAFT', 'ON_GOING'] } }
-    if (tab === 'pending') return { status: { in: ['SENT', 'ACCEPTED'] } }
+    if (tab === 'drafts') return { status: { in: ['DRAFT', 'ON_GOING', 'PROFORMA'] } }
+    if (tab === 'pending') return { status: { in: ['SENT', 'ACCEPTED', 'QUOTE'] } }
     return { status: { not: 'CANCELED' } }
   }
 
@@ -296,17 +315,35 @@ export async function getDocuments(
     includeInvoices ? prisma.invoice.count({ where: invoiceWhere }) : Promise.resolve(0),
   ])
   const mixed = includeEstimations && includeInvoices
+  const needsMemorySort = mixed || sort === 'status' || sort === 'remaining'
   const listTotal = mixed ? estimationCount + invoiceCount : includeEstimations ? estimationCount : invoiceCount
   const listMeta = paginationMeta(listTotal, parsePage(page), parseLimit(limit))
-  const skip = mixed ? undefined : listMeta.skip
-  const take = mixed ? undefined : listMeta.take
+  const skip = needsMemorySort ? undefined : listMeta.skip
+  const take = needsMemorySort ? undefined : listMeta.take
+
+  const estimationOrderBy: Prisma.EstimationOrderByWithRelationInput =
+    sort === 'code'
+      ? { code: dir }
+      : sort === 'customer'
+        ? { customer: { name: dir } }
+        : sort === 'amount'
+          ? { totalAmount: dir }
+          : { createdAt: dir }
+  const invoiceOrderBy: Prisma.InvoiceOrderByWithRelationInput =
+    sort === 'code'
+      ? { code: dir }
+      : sort === 'customer'
+        ? { customer: { name: dir } }
+        : sort === 'amount'
+          ? { estimation: { totalAmount: dir } }
+          : { createdAt: dir }
 
   const [estimationRows, invoiceRows, statInvoices, statEstimations, customers, cancellationCount] = await Promise.all([
     includeEstimations
       ? prisma.estimation.findMany({
           where: estimationWhere,
           include: { customer: true, invoice: true },
-          orderBy: { createdAt: 'desc' },
+          orderBy: estimationOrderBy,
           skip,
           take,
         })
@@ -320,7 +357,7 @@ export async function getDocuments(
             collections: { where: { isDeleted: false } },
             creditNotes: { select: { amount: true } },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: invoiceOrderBy,
           skip,
           take,
         })
@@ -394,10 +431,15 @@ export async function getDocuments(
     }
   })
 
-  const documents = [...invoiceDocs, ...estimationDocs].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
-  const data = mixed ? documents.slice(listMeta.skip, listMeta.skip + listMeta.take) : documents
+  const documents = sortBy([...invoiceDocs, ...estimationDocs], dir, (left, right) => {
+    if (sort === 'code') return compareText(left.code, right.code)
+    if (sort === 'customer') return compareText(left.customerName, right.customerName)
+    if (sort === 'status') return compareStatus(left.status, right.status)
+    if (sort === 'amount') return compareNumber(left.totalTtc, right.totalTtc)
+    if (sort === 'remaining') return compareNumber(left.remaining, right.remaining)
+    return compareDate(left.createdAt, right.createdAt)
+  })
+  const data = needsMemorySort ? documents.slice(listMeta.skip, listMeta.skip + listMeta.take) : documents
 
   const billed = statInvoices.reduce((sum, item) => sum + Number(item.estimation.totalAmount), 0)
   const outstanding = statInvoices.reduce((sum, item) => {
@@ -407,7 +449,7 @@ export async function getDocuments(
   }, 0)
   const pendingQuotes = statEstimations.filter((item) => {
     const status = normalizeEstimationStatus(item.status)
-    return status === 'DRAFT' || status === 'SENT' || status === 'ACCEPTED'
+    return status === 'PROFORMA' || status === 'QUOTE' || status === 'DRAFT' || status === 'SENT' || status === 'ACCEPTED'
   }).length
 
   return {
@@ -509,7 +551,7 @@ export async function createDocument(input: {
           hasTva,
           warranty: Math.min(Math.max(parseInt(String(input.warranty ?? 0), 10) || 0, 0), 12),
           status: estimationStatus(
-            asInvoice ? 'INVOICED' : input.official ? 'SENT' : 'DRAFT',
+            asInvoice ? 'INVOICED' : input.official ? 'QUOTE' : 'PROFORMA',
           ),
           totalAmount: BigInt(totals.ttc),
           globalDiscountRate,
@@ -522,6 +564,12 @@ export async function createDocument(input: {
         } as Prisma.EstimationUncheckedCreateInput,
       })
 
+      const createdItems: Array<{
+        id: bigint
+        productId: number
+        quantity: number
+        unitPrice: bigint
+      }> = []
       for (const line of lines) {
         const product = line.productId
           ? productById.get(line.productId)
@@ -532,7 +580,7 @@ export async function createDocument(input: {
           throw new Error(`Produit introuvable: ${line.designation}`)
         }
         const ht = Math.round(line.unitPrice * line.quantity * (1 - (line.discountRate || 0) / 100))
-        await tx.estimationItem.create({
+        const item = await tx.estimationItem.create({
           data: {
             estimationId: estimation.id,
             productId: product.id,
@@ -542,6 +590,12 @@ export async function createDocument(input: {
             discountRate: line.discountRate || 0,
             totalPrice: BigInt(ht),
           } as Prisma.EstimationItemUncheckedCreateInput,
+        })
+        createdItems.push({
+          id: item.id,
+          productId: product.id,
+          quantity: line.quantity,
+          unitPrice: item.unitPrice,
         })
       }
 
@@ -563,6 +617,17 @@ export async function createDocument(input: {
           } as Prisma.InvoiceUncheckedCreateInput,
         })
         invoicePublicId = invoice.publicId
+        await consumeStockForSale(tx, {
+          companyId: ctx.user.companyId,
+          customerId: customer.id,
+          actorId: ctx.user.id,
+          items: createdItems.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            estimationItemId: item.id,
+          })),
+        })
       }
 
       return { estimationPublicId: estimation.publicId, invoicePublicId }
@@ -571,8 +636,50 @@ export async function createDocument(input: {
     revalidatePath(PATH)
     return { ok: true, publicId: created.invoicePublicId ?? created.estimationPublicId }
   } catch (error) {
+    const message = error instanceof Error ? error.message : "L'enregistrement du document a échoué."
     console.error('Erreur création document:', error)
-    return { ok: false, error: "L'enregistrement du document a échoué." }
+    return { ok: false, error: message }
+  }
+}
+
+export async function convertProformaToQuote(input: {
+  estimationPublicId: string
+}): Promise<ActionResult> {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return { ok: false, error: ctx.error }
+
+  const estimation = await prisma.estimation.findFirst({
+    where: {
+      publicId: input.estimationPublicId,
+      companyId: ctx.user.companyId,
+    },
+    include: { invoice: true },
+  })
+  if (!estimation) return { ok: false, error: 'Proforma introuvable.' }
+  if (estimation.invoice) return { ok: false, error: 'Ce document est déjà facturé.' }
+  if (!isProformaStatus(String(estimation.status))) {
+    return { ok: false, error: 'Seul un brouillon proforma peut être converti en devis.' }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const code = isUnofficialEstimationCode(estimation.code)
+        ? await nextOfficialCode(tx, ctx.user.companyId, estimation.fiscalYear, 'ESTIMATION')
+        : estimation.code
+      await tx.estimation.update({
+        where: { id: estimation.id },
+        data: {
+          status: estimationStatus('QUOTE'),
+          code,
+        } as Prisma.EstimationUncheckedUpdateInput,
+      })
+    })
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${estimation.publicId}`)
+    return { ok: true, publicId: estimation.publicId }
+  } catch (error) {
+    console.error('Erreur conversion proforma:', error)
+    return { ok: false, error: 'La conversion en devis a échoué.' }
   }
 }
 
@@ -590,7 +697,7 @@ export async function convertEstimationToInvoice(input: {
       publicId: input.estimationPublicId,
       companyId: ctx.user.companyId,
     },
-    include: { invoice: true },
+    include: { invoice: true, items: true },
   })
   if (!estimation) return { ok: false, error: 'Devis introuvable.' }
   if (estimation.invoice) return { ok: false, error: 'Ce devis est déjà facturé.' }
@@ -599,6 +706,12 @@ export async function convertEstimationToInvoice(input: {
     estimation.status === estimationStatus('REJECTED')
   ) {
     return { ok: false, error: 'Ce devis ne peut pas être converti.' }
+  }
+  if (isProformaStatus(String(estimation.status))) {
+    return { ok: false, error: 'Convertissez d’abord cette proforma en devis.' }
+  }
+  if (!isQuoteStatus(String(estimation.status))) {
+    return { ok: false, error: 'Seul un devis officiel peut être transformé en facture.' }
   }
 
   const totalTtc = Number(estimation.totalAmount)
@@ -647,6 +760,18 @@ export async function convertEstimationToInvoice(input: {
         })
       }
 
+      await consumeStockForSale(tx, {
+        companyId: ctx.user.companyId,
+        customerId: estimation.customerId,
+        actorId: ctx.user.id,
+        items: estimation.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          estimationItemId: item.id,
+        })),
+      })
+
       return created
     })
 
@@ -654,8 +779,9 @@ export async function convertEstimationToInvoice(input: {
     revalidatePath(`${PATH}/${estimation.publicId}`)
     return { ok: true, publicId: invoice.publicId }
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'La conversion en facture a échoué.'
     console.error('Erreur conversion devis:', error)
-    return { ok: false, error: 'La conversion en facture a échoué.' }
+    return { ok: false, error: message }
   }
 }
 
@@ -692,7 +818,7 @@ export async function duplicateDocument(publicId: string): Promise<ActionResult>
         fiscalYear: copyIssueDate.getFullYear(),
         hasTva: source.hasTva,
         warranty: source.warranty,
-        status: estimationStatus('DRAFT'),
+        status: estimationStatus('PROFORMA'),
         totalAmount: source.totalAmount,
         globalDiscountRate: sourceMeta.globalDiscountRate,
         notes: sourceMeta.notes,
@@ -732,6 +858,54 @@ export async function createQuickCustomer(formData: FormData): Promise<ActionRes
     nif: String(formData.get('nif') ?? ''),
     postBox: String(formData.get('postBox') ?? ''),
   })
+}
+
+export async function cancelEstimation(input: {
+  estimationPublicId: string
+  reason?: string
+}): Promise<ActionResult> {
+  const ctx = await getTenantContext()
+  if (!ctx.ok) return { ok: false, error: ctx.error }
+
+  const estimation = await prisma.estimation.findFirst({
+    where: {
+      publicId: input.estimationPublicId,
+      companyId: ctx.user.companyId,
+    },
+    include: { invoice: true },
+  })
+  if (!estimation) return { ok: false, error: 'Devis introuvable.' }
+  if (estimation.invoice || estimation.status === estimationStatus('INVOICED')) {
+    return { ok: false, error: 'Ce devis est déjà facturé. Annulez la facture correspondante.' }
+  }
+  if (estimation.status === estimationStatus('CANCELED')) {
+    return { ok: false, error: 'Ce devis est déjà annulé.' }
+  }
+
+  const motif = String(input.reason ?? '').trim()
+  const cancelLine = motif ? `Annulation : ${motif}` : null
+  const currentNotes = estimation.notes?.trim() ?? ''
+  const notes = cancelLine
+    ? currentNotes
+      ? `${currentNotes}\n${cancelLine}`
+      : cancelLine
+    : estimation.notes
+
+  try {
+    await prisma.estimation.update({
+      where: { id: estimation.id },
+      data: {
+        status: estimationStatus('CANCELED'),
+        notes,
+      } as Prisma.EstimationUncheckedUpdateInput,
+    })
+    revalidatePath(PATH)
+    revalidatePath(`${PATH}/${estimation.publicId}`)
+    return { ok: true, publicId: estimation.publicId }
+  } catch (error) {
+    console.error('Erreur annulation devis:', error)
+    return { ok: false, error: 'L’annulation du devis a échoué.' }
+  }
 }
 
 export async function updateEstimationStatus(input: {

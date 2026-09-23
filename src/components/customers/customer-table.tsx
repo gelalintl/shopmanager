@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/typography'
 import { IconEye, IconPencil, IconTrash } from '@/components/ui/icons'
+import { SortableHeader } from '@/components/ui/sortable-header'
 import { deleteCustomer } from '@/app/dashboard/customers/actions'
 import { useRestrictedAction } from '@/components/auth/admin-approval-modal'
 import { kindLabel, type CustomerListItem } from '@/lib/customers'
@@ -42,10 +43,10 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
         <table className="w-full min-w-[48rem] table-fixed text-left">
           <thead className="border-b border-subtle-border bg-powder/80">
             <tr>
-              <th className="w-32 px-4 py-3 text-sm font-bold text-foreground-muted">Type</th>
-              <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Nom / Raison sociale</th>
-              <th className="w-40 px-4 py-3 text-sm font-bold text-foreground-muted">NIF</th>
-              <th className="px-4 py-3 text-sm font-bold text-foreground-muted">Téléphone & Email</th>
+              <SortableHeader className="w-32" sortKey="kind" label="Type" fallbackKey="name" fallbackDir="asc" />
+              <SortableHeader sortKey="name" label="Nom / Raison sociale" fallbackKey="name" fallbackDir="asc" />
+              <SortableHeader className="w-40" sortKey="nif" label="NIF" fallbackKey="name" fallbackDir="asc" />
+              <SortableHeader sortKey="contact" label="Téléphone & Email" fallbackKey="name" fallbackDir="asc" />
               <th className="w-36 px-3 py-3 text-sm font-bold text-foreground-muted">Actions</th>
             </tr>
           </thead>

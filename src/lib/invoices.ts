@@ -12,10 +12,14 @@ export type DocumentListFilters = {
   searchQuery?: string
   status?: InvoiceTab | string
   kind?: DocumentKind | 'all' | string
+  sort?: string
+  dir?: string
 }
 
 export type DocumentStatus =
   | 'DRAFT'
+  | 'PROFORMA'
+  | 'QUOTE'
   | 'SENT'
   | 'ACCEPTED'
   | 'REJECTED'
@@ -96,7 +100,7 @@ export type CatalogCustomer = {
   publicId: string
   name: string
   phone: string | null
-  address: string
+  address: string | null
   postBox: string | null
   email: string | null
   nif: string | null
@@ -124,7 +128,7 @@ export type PrintCompany = {
 export type PrintCustomer = {
   name: string
   phone: string | null
-  address: string
+  address: string | null
   postBox: string | null
   email: string | null
   nif: string | null
@@ -222,11 +226,10 @@ export function invoiceSettlement(ttc: number, collected: number, credited = 0) 
 }
 
 export function normalizeEstimationStatus(status: string): DocumentStatus {
-  if (status === 'ON_GOING') return 'DRAFT'
+  if (status === 'ON_GOING' || status === 'DRAFT' || status === 'PROFORMA') return 'PROFORMA'
   if (status === 'VALIDATED') return 'INVOICED'
+  if (status === 'SENT' || status === 'QUOTE') return 'QUOTE'
   if (
-    status === 'DRAFT' ||
-    status === 'SENT' ||
     status === 'ACCEPTED' ||
     status === 'REJECTED' ||
     status === 'INVOICED' ||
@@ -234,7 +237,23 @@ export function normalizeEstimationStatus(status: string): DocumentStatus {
   ) {
     return status
   }
-  return 'DRAFT'
+  return 'PROFORMA'
+}
+
+export function isProformaStatus(status: string) {
+  return status === 'PROFORMA' || status === 'DRAFT' || status === 'ON_GOING'
+}
+
+export function isQuoteStatus(status: string) {
+  return status === 'QUOTE' || status === 'SENT' || status === 'ACCEPTED'
+}
+
+export function canConvertProformaToQuote(status: string) {
+  return isProformaStatus(status)
+}
+
+export function canConvertQuoteToInvoice(status: string) {
+  return status === 'QUOTE' || status === 'SENT' || status === 'ACCEPTED'
 }
 
 export function resolveInvoiceStatus(
@@ -259,8 +278,10 @@ export function resolveInvoiceStatus(
 }
 
 export const statusLabels: Record<DocumentStatus, string> = {
-  DRAFT: 'Brouillon',
-  SENT: 'Envoyé',
+  DRAFT: 'Proforma',
+  PROFORMA: 'Proforma',
+  QUOTE: 'Devis',
+  SENT: 'Devis',
   ACCEPTED: 'Accepté',
   REJECTED: 'Refusé',
   INVOICED: 'Facturé',
@@ -272,8 +293,35 @@ export const statusLabels: Record<DocumentStatus, string> = {
   CANCELED: 'Annulé',
 }
 
+export function documentKindLabel(kind: DocumentKind, status?: DocumentStatus) {
+  if (kind === 'INVOICE') return 'Facture'
+  if (status && isProformaStatus(status)) return 'Proforma'
+  if (status && (isQuoteStatus(status) || status === 'REJECTED' || status === 'CANCELED' || status === 'INVOICED')) {
+    return 'Devis'
+  }
+  return 'Devis / Proforma'
+}
+
+export function documentStatusLabel(status: DocumentStatus, kind?: DocumentKind) {
+  if (kind === 'ESTIMATION' && isProformaStatus(status)) return 'Proforma'
+  if (kind === 'ESTIMATION' && (status === 'QUOTE' || status === 'SENT')) return 'Devis'
+  return statusLabels[status]
+}
+
+export function documentPrintHref(kind: DocumentKind, estimationPublicId: string) {
+  return kind === 'ESTIMATION'
+    ? `/dashboard/quotes/${estimationPublicId}/print`
+    : `/dashboard/invoices/${estimationPublicId}/print`
+}
+
+export function canCancelEstimation(status: DocumentStatus) {
+  return status !== 'INVOICED' && status !== 'CANCELED'
+}
+
 export const statusClass: Record<DocumentStatus, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
+  PROFORMA: 'bg-slate-100 text-slate-700',
+  QUOTE: 'bg-soft-cobalt text-cobalt',
   SENT: 'bg-soft-cobalt text-cobalt',
   ACCEPTED: 'bg-emerald-50 text-emerald-700',
   REJECTED: 'bg-red-50 text-red-700',

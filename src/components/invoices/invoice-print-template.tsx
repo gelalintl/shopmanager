@@ -3,9 +3,11 @@ import {
   amountToLetters,
   formatCfa,
   formatFrDate,
+  isProformaStatus,
   printAccentVars,
   TVA_RATE,
   type DocumentKind,
+  type DocumentStatus,
   type DocumentTotals,
   type PrintCompany,
   type PrintCustomer,
@@ -26,6 +28,7 @@ export type PrintLine = {
 
 type InvoicePrintTemplateProps = {
   kind: DocumentKind
+  status?: DocumentStatus
   code: string
   dateLabel: string
   company: PrintCompany
@@ -45,6 +48,7 @@ type InvoicePrintTemplateProps = {
 
 export function InvoicePrintTemplate({
   kind,
+  status,
   code,
   dateLabel,
   company,
@@ -61,8 +65,14 @@ export function InvoicePrintTemplate({
   copyLabel,
   sheet = 'a4',
 }: InvoicePrintTemplateProps) {
-  const title = kind === 'INVOICE' ? 'FACTURE' : 'DEVIS'
-  const decree = kind === 'INVOICE' ? 'La présente facture est arrêtée' : 'Le présent devis est arrêté'
+  const title =
+    kind === 'INVOICE' ? 'FACTURE' : isProformaStatus(status ?? '') ? 'FACTURE PROFORMA' : 'DEVIS'
+  const decree =
+    kind === 'INVOICE'
+      ? 'La présente facture est arrêtée'
+      : isProformaStatus(status ?? '')
+        ? 'La présente facture proforma est arrêtée'
+        : 'Le présent devis est arrêté'
   const remaining = Math.max(totals.ttc - paidAmount, 0)
   const hasDiscounts = totals.globalDiscount > 0 || lines.some((line) => (line.discountRate || 0) > 0)
   const columnCount =
@@ -138,7 +148,7 @@ export function InvoicePrintTemplate({
           <div className="mt-1 font-bold">
             <p>{customer.name}</p>
             {customer.phone ? <p>Tél. : {customer.phone}</p> : null}
-            <p>{customer.address}</p>
+            {customer.address ? <p>{customer.address}</p> : null}
             {customer.postBox ? <p>B.P. : {customer.postBox}</p> : null}
             {customer.nif ? <p>NIF : {customer.nif}</p> : null}
           </div>

@@ -76,6 +76,7 @@ export function ProductCatalog({
         </Button>
       </div>
 
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
       <ProductTable
         products={products}
         onEdit={(product) => {
@@ -83,7 +84,7 @@ export function ProductCatalog({
           setModalOpen(true)
         }}
       />
-      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} />
+      <Pagination totalCount={totalCount} currentPage={currentPage} limit={limit} persistSize={false} />
 
       <AddProductModal
         open={modalOpen}

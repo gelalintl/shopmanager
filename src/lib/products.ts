@@ -1,14 +1,29 @@
 export type StockFilter = 'all' | 'ok' | 'low' | 'out'
 export type StockStatus = 'ok' | 'low' | 'out'
+export type ProductKind = 'MARCHANDISE' | 'PRESTATION'
 
 export type ProductListItem = {
   publicId: string
   code: string
   designation: string
+  type: ProductKind
   unitPrice: number
   purchasePrice: number | null
   quantity: number
   alertThreshold: number
+}
+
+export const productTypeLabels: Record<ProductKind, string> = {
+  MARCHANDISE: 'Marchandise',
+  PRESTATION: 'Prestation de service',
+}
+
+export function parseProductType(value: unknown): ProductKind {
+  return String(value ?? '').toUpperCase() === 'PRESTATION' ? 'PRESTATION' : 'MARCHANDISE'
+}
+
+export function isServiceProduct(type: ProductKind | string | null | undefined) {
+  return type === 'PRESTATION'
 }
 
 export function getStockStatus(quantity: number, alertThreshold: number): StockStatus {

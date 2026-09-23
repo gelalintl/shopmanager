@@ -9,7 +9,7 @@ export type CustomerInput = {
   nif?: string | null
   phone?: string | null
   email?: string | null
-  address: string
+  address?: string | null
   postBox?: string | null
 }
 
@@ -20,7 +20,7 @@ export type CustomerListItem = {
   nif: string | null
   phone: string | null
   email: string | null
-  address: string
+  address: string | null
   postBox: string | null
   billed: number
   collected: number
@@ -51,7 +51,7 @@ export function toCatalogCustomer(customer: {
   publicId: string
   name: string
   phone: string | null
-  address: string
+  address: string | null
   postBox: string | null
   email: string | null
   nif: string | null

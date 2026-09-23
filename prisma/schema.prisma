@@ -22,17 +22,25 @@ enum CustomerKind {
   INDIVIDUAL // Particulier
 }
 
+enum ProductType {
+  MARCHANDISE // Article physique suivi en stock
+  PRESTATION  // Service : jamais de décrément / rupture de stock
+}
+
 enum MovementType {
-  IN  // Entrée de stock (Réapprovisionnement, création)
-  OUT // Sortie de stock (Vente, perte, casse)
+  IN          // Entrée de stock (Réapprovisionnement, création)
+  OUT         // Sortie de stock (Vente, perte, casse)
+  ADJUSTMENT  // Rectification d’inventaire (delta signé)
 }
 
 enum EstimationStatus {
-  DRAFT      // Brouillon (pas encore numéroté officiellement)
-  SENT       // Devis émis / envoyé
+  DRAFT      // Rétrocompatibilité (traité comme PROFORMA)
+  PROFORMA   // Brouillon de devis non confirmé
+  QUOTE      // Devis officiel confirmé
+  SENT       // Rétrocompatibilité (traité comme QUOTE)
   ACCEPTED   // Accepté par le client
   REJECTED   // Refusé
-  ON_GOING   // Rétrocompatibilité (traité comme DRAFT)
+  ON_GOING   // Rétrocompatibilité (traité comme PROFORMA)
   VALIDATED  // Rétrocompatibilité (traité comme INVOICED)
   INVOICED   // Transformé en facture
   CANCELED   // Annulé
@@ -179,7 +187,7 @@ model Customer {
   email     String?
   phone     String?
   nif       String?
-  address   String
+  address   String?
 
   createdById Int
   createdBy   User     @relation("CustomerCreator", fields: [createdById], references: [id])
@@ -213,6 +221,7 @@ model Product {
 
   code           String  // Ex: "CAB012"
   designation    String
+  type           ProductType @default(MARCHANDISE)
   unitPrice      BigInt  // Prix unitaire de vente (XOF)
   purchasePrice  BigInt? // Prix d'achat optionnel (XOF)
   alertThreshold Int     @default(0) // Seuil d'alerte stock
@@ -243,8 +252,9 @@ model StockMovement {
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   type         MovementType
-  quantity     Int          // Toujours positif
+  quantity     Int          // Positif pour IN/OUT ; delta signé pour ADJUSTMENT
   sellingPrice BigInt       @default(0)
+  reason       String?
 
   productId    Int
   product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)

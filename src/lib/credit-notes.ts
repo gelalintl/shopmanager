@@ -10,6 +10,7 @@ import {
 } from '@/lib/invoices'
 import { invoiceStatusFromPaid } from '@/lib/payments'
 import { toPrintCompany } from '@/lib/settings'
+import { isServiceProduct } from '@/lib/stock'
 
 export const CREDIT_NOTE_REASONS = [
   'Erreur de saisie caisse',
@@ -104,6 +105,7 @@ export async function issueCreditNote(data: CreditNoteInput): Promise<CreditNote
               productId: true,
               quantity: true,
               unitPrice: true,
+              product: { select: { type: true } },
             },
           },
         },
@@ -169,7 +171,7 @@ export async function issueCreditNote(data: CreditNoteInput): Promise<CreditNote
 
       if (shouldRestock) {
         for (const item of invoice.estimation.items) {
-          if (item.quantity <= 0) continue
+          if (item.quantity <= 0 || isServiceProduct(item.product.type)) continue
           await tx.stockMovement.create({
             data: {
               companyId: invoice.companyId,

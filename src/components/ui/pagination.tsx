@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   DEFAULT_PAGE_SIZE,
   PAGE_SIZE_OPTIONS,
@@ -20,9 +20,10 @@ type PaginationProps = {
   totalCount: number
   currentPage: number
   limit: number
+  persistSize?: boolean
 }
 
-export function Pagination({ totalCount, currentPage, limit }: PaginationProps) {
+export function Pagination({ totalCount, currentPage, limit, persistSize = true }: PaginationProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -43,7 +44,7 @@ export function Pagination({ totalCount, currentPage, limit }: PaginationProps) 
   }
 
   useEffect(() => {
-    if (searchParams.has('limit')) return
+    if (!persistSize || searchParams.has('limit')) return
     try {
       const stored = parseLimit(window.localStorage.getItem(PAGE_SIZE_STORAGE_KEY))
       if (stored === DEFAULT_PAGE_SIZE) return
@@ -97,14 +98,21 @@ export function Pagination({ totalCount, currentPage, limit }: PaginationProps) 
       </p>
 
       <div className="flex flex-wrap items-center justify-end gap-1">
-        <Button
-          variant="outline"
-          size="sm"
+        <button
+          type="button"
+          aria-label="Page précédente"
+          title="Page précédente"
           disabled={page <= 1}
           onClick={() => setPage(page - 1)}
+          className={cn(
+            'inline-flex h-9 w-9 items-center justify-center rounded-full border border-subtle-border bg-white text-foreground transition-all duration-200',
+            page <= 1
+              ? 'cursor-not-allowed opacity-40'
+              : 'hover:border-cobalt hover:text-cobalt',
+          )}
         >
-          Précédent
-        </Button>
+          <ChevronLeft className="h-4 w-4" />
+        </button>
         {pageWindow(page, totalPages).map((item, index) =>
           item === 'gap' ? (
             <span key={`gap-${index}`} className="px-1 text-foreground-muted">
@@ -127,14 +135,21 @@ export function Pagination({ totalCount, currentPage, limit }: PaginationProps) 
             </button>
           ),
         )}
-        <Button
-          variant="outline"
-          size="sm"
+        <button
+          type="button"
+          aria-label="Page suivante"
+          title="Page suivante"
           disabled={page >= totalPages}
           onClick={() => setPage(page + 1)}
+          className={cn(
+            'inline-flex h-9 w-9 items-center justify-center rounded-full border border-subtle-border bg-white text-foreground transition-all duration-200',
+            page >= totalPages
+              ? 'cursor-not-allowed opacity-40'
+              : 'hover:border-cobalt hover:text-cobalt',
+          )}
         >
-          Suivant
-        </Button>
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
