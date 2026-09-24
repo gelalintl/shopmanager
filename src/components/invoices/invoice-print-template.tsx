@@ -3,6 +3,7 @@ import {
   amountToLetters,
   formatCfa,
   formatFrDate,
+  globalDiscountLabel,
   isProformaStatus,
   printAccentVars,
   TVA_RATE,
@@ -206,7 +207,7 @@ export function InvoicePrintTemplate({
         {totals.globalDiscount > 0 ? (
           <>
             <div className="flex justify-between text-foreground-muted">
-              <span>Remise globale</span>
+              <span>{globalDiscountLabel(totals)}</span>
               <span>- {formatCfa(totals.globalDiscount)}</span>
             </div>
             <div className="flex justify-between">

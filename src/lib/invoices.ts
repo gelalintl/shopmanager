@@ -57,6 +57,7 @@ export type DocumentLineView = DocumentLineInput & {
 export type DocumentTotals = {
   linesHt: number
   globalDiscount: number
+  globalDiscountRate?: number
   ht: number
   vat: number
   ttc: number
@@ -175,7 +176,21 @@ export function computeTotals(
   const ht = linesHt - globalDiscount
   const vat = hasTva ? Math.round(ht * TVA_RATE) : 0
   const ttc = ht + vat
-  return { linesHt, globalDiscount, ht, vat, ttc }
+  return { linesHt, globalDiscount, globalDiscountRate: globalRate, ht, vat, ttc }
+}
+
+export function globalDiscountPercent(totals: Pick<DocumentTotals, 'linesHt' | 'globalDiscount' | 'globalDiscountRate'>): number {
+  const stored = Number(totals.globalDiscountRate)
+  if (Number.isFinite(stored) && stored > 0) {
+    return Math.round(Math.min(Math.max(stored, 0), 100))
+  }
+  const totalHt = totals.linesHt
+  return totalHt > 0 ? Math.round((totals.globalDiscount / totalHt) * 100) : 0
+}
+
+export function globalDiscountLabel(totals: Pick<DocumentTotals, 'linesHt' | 'globalDiscount' | 'globalDiscountRate'>): string {
+  const discountPercent = globalDiscountPercent(totals)
+  return discountPercent > 0 ? `Remise globale (${discountPercent} %)` : 'Remise globale'
 }
 
 export function toInputDate(date: Date) {
