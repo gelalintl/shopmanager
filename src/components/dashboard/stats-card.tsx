@@ -1,7 +1,12 @@
-import type { ReactNode } from 'react'
+'use client'
+
+import { useEffect, useState, type ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/card'
 import { Caption, Heading, Text } from '@/components/ui/typography'
 import { cn } from '@/lib/cn'
+
+export const HIDE_SUMMARY_CARDS_KEY = 'hide_summary_cards'
 
 type StatsTone = 'default' | 'warning' | 'success'
 
@@ -15,7 +20,7 @@ type StatsCardProps = {
 }
 
 const toneClass: Record<StatsTone, string> = {
-  default: 'bg-soft-cobalt text-cobalt',
+  default: 'bg-primary/10 text-primary',
   warning: 'bg-amber-50 text-amber-600',
   success: 'bg-emerald-50 text-emerald-600',
 }
@@ -54,5 +59,52 @@ export function StatsCard({
         </div>
       </CardBody>
     </Card>
+  )
+}
+
+type SummaryCardsProps = {
+  children: ReactNode
+  className?: string
+}
+
+export function SummaryCards({ children, className }: SummaryCardsProps) {
+  const [hidden, setHidden] = useState(false)
+
+  useEffect(() => {
+    try {
+      setHidden(window.localStorage.getItem(HIDE_SUMMARY_CARDS_KEY) === 'true')
+    } catch {
+      setHidden(false)
+    }
+  }, [])
+
+  function toggle() {
+    setHidden((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(HIDE_SUMMARY_CARDS_KEY, String(next))
+      } catch {
+        // private mode / quota
+      }
+      return next
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={toggle}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-white hover:text-primary"
+          aria-pressed={hidden}
+          aria-label={hidden ? 'Afficher les cartes récapitulatives' : 'Masquer les cartes récapitulatives'}
+          title={hidden ? 'Afficher les cartes' : 'Masquer les cartes'}
+        >
+          {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+        </button>
+      </div>
+      {hidden ? null : <div className={className}>{children}</div>}
+    </section>
   )
 }

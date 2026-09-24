@@ -64,6 +64,8 @@ export type DocumentTotals = {
 }
 
 export const DEFAULT_PRINT_ACCENT = '#1d4ed8'
+export const DEFAULT_PRIMARY_COLOR = '#1e40af'
+export const DEFAULT_SIGNATORY_TITLE = 'NOM & SIGNATURE GÉRANT'
 
 export type PrintSettings = {
   showUnitPrice: boolean
@@ -124,6 +126,7 @@ export type PrintCompany = {
   slogan: string | null
   logoPath?: string | null
   logoUrl?: string | null
+  signatoryTitle?: string | null
 }
 
 export type PrintCustomer = {
@@ -336,8 +339,8 @@ export function canCancelEstimation(status: DocumentStatus) {
 export const statusClass: Record<DocumentStatus, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
   PROFORMA: 'bg-slate-100 text-slate-700',
-  QUOTE: 'bg-soft-cobalt text-cobalt',
-  SENT: 'bg-soft-cobalt text-cobalt',
+  QUOTE: 'bg-primary/10 text-primary',
+  SENT: 'bg-primary/10 text-primary',
   ACCEPTED: 'bg-emerald-50 text-emerald-700',
   REJECTED: 'bg-red-50 text-red-700',
   INVOICED: 'bg-indigo-50 text-indigo-700',
@@ -427,6 +430,11 @@ export function parsePrintSettings(value: unknown): PrintSettings {
     bankName: String(raw.bankName ?? '').trim(),
     bankAccountName: String(raw.bankAccountName ?? '').trim(),
   }
+}
+
+export function resolveSignatoryTitle(value: unknown): string {
+  const text = String(value ?? '').trim()
+  return text || DEFAULT_SIGNATORY_TITLE
 }
 
 export function printAccentVars(accent = DEFAULT_PRINT_ACCENT) {

@@ -33,9 +33,9 @@ export function TopProductsCard({ products }: TopProductsCardProps) {
                 </div>
                 <span className="shrink-0 text-sm font-bold">{formatCfa(product.revenue)}</span>
               </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-soft-cobalt">
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-primary/10">
                 <div
-                  className="h-full rounded-full bg-cobalt"
+                  className="h-full rounded-full bg-primary"
                   style={{ width: `${Math.max(8, (product.revenue / max) * 100)}%` }}
                 />
               </div>

@@ -89,8 +89,8 @@ function QuickProductForm({
                 className={cn(
                   'flex-1 rounded-full border px-3 py-2 text-sm font-bold transition-all duration-200',
                   type === option
-                    ? 'border-cobalt bg-cobalt text-white'
-                    : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                    ? 'border-primary bg-primary text-white'
+                    : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
                 )}
               >
                 {option === 'MARCHANDISE' ? 'Marchandise' : 'Prestation'}

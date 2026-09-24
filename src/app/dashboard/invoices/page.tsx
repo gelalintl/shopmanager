@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
-import { StatsCard } from '@/components/dashboard/stats-card'
+import { StatsCard, SummaryCards } from '@/components/dashboard/stats-card'
 import { InvoiceWorkspace } from '@/components/invoices/invoice-workspace'
 import { getDocuments } from '@/app/dashboard/invoices/actions'
 import { formatCfa, type InvoiceTab } from '@/lib/invoices'
@@ -56,11 +56,11 @@ export default async function InvoicesPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatsCard title="Chiffre d'affaires facturé" value={formatCfa(result.billed)} hint="Factures émises" />
         <StatsCard title="Devis en attente" value={String(result.pendingQuotes)} hint="Proformas, envoyés, acceptés" />
         <StatsCard title="Reste à recouvrer" value={formatCfa(result.outstanding)} hint="Impayé + acomptes" tone="warning" />
-      </div>
+      </SummaryCards>
       <Suspense fallback={null}>
         <InvoiceWorkspace
           documents={result.documents}

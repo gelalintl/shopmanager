@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Caption, Heading, Text } from '@/components/ui/typography'
-import { StatsCard } from '@/components/dashboard/stats-card'
+import { StatsCard, SummaryCards } from '@/components/dashboard/stats-card'
 import { CustomerModal } from '@/components/customers/customer-modal'
 import { PaymentDialog } from '@/components/payments/payment-dialog'
 import { kindLabel, type CustomerDetails } from '@/lib/customers'
@@ -37,7 +37,7 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
             <span
               className={cn(
                 'inline-flex rounded-full px-2.5 py-1 text-xs font-bold',
-                customer.kind === 'COMPANY' ? 'bg-soft-cobalt text-cobalt' : 'bg-slate-100 text-slate-600',
+                customer.kind === 'COMPANY' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-600',
               )}
             >
               {kindLabel(customer.kind)}
@@ -71,7 +71,7 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatsCard
           title="Total facturé"
           value={formatCfa(customer.billed)}
@@ -88,7 +88,7 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
           hint={`${customer.estimationCount} devis`}
           tone={customer.remaining > 0 ? 'warning' : 'success'}
         />
-      </div>
+      </SummaryCards>
 
       <Card className="overflow-hidden">
         <div className="border-b border-subtle-border px-4 py-3">
@@ -120,7 +120,7 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
                     <td className="overflow-hidden px-4 py-3 align-middle">
                       <Link
                         href={`/dashboard/invoices/${doc.estimationPublicId}`}
-                        className="font-bold text-cobalt hover:underline"
+                        className="font-bold text-primary hover:underline"
                       >
                         {doc.code}
                       </Link>

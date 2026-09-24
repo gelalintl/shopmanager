@@ -7,6 +7,8 @@ import { getTenantContext } from '@/lib/tenant'
 import { authorizeMutation } from '@/lib/rbac'
 import { MANAGER_ROLES } from '@/lib/auth'
 import {
+  DEFAULT_PRIMARY_COLOR,
+  DEFAULT_SIGNATORY_TITLE,
   defaultPrintSettings,
   parsePrintSettings,
   type PrintSettings,
@@ -25,8 +27,11 @@ import {
 import {
   clearCompanyLogo,
   getCompanyLogo,
+  getPrimaryColor,
   normalizeLogoDataUri,
   setCompanyLogo,
+  setDeliverySignatoryTitle,
+  setPrimaryColor,
 } from '@/lib/site-settings'
 
 const PATH = '/dashboard/settings'
@@ -68,9 +73,11 @@ export async function getSettings(): Promise<SettingsPayload | null> {
   ])
   if (!company || !user) return null
 
+  const printCompany = await loadPrintCompany(company)
+
   return {
     company: {
-      ...(await loadPrintCompany(company)),
+      ...printCompany,
       phone2: company.phone2,
     },
     print: parsePrintSettings(company.printSettings),
@@ -79,6 +86,8 @@ export async function getSettings(): Promise<SettingsPayload | null> {
       pseudo: user.pseudo,
       role: user.role,
     },
+    signatoryTitle: printCompany.signatoryTitle ?? DEFAULT_SIGNATORY_TITLE,
+    primaryColor: await getPrimaryColor(authz.user.companyId),
   }
 }
 
@@ -211,6 +220,8 @@ export async function updatePrintSettings(data: PrintSettingsInput): Promise<Act
       printSettings: next,
     },
   })
+  await setDeliverySignatoryTitle(ctx.user.companyId, String(data.signatoryTitle ?? ''))
+  await setPrimaryColor(ctx.user.companyId, String(data.primaryColor ?? DEFAULT_PRIMARY_COLOR))
   revalidateSettings()
   return { ok: true }
 }

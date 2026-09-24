@@ -180,7 +180,7 @@ export function InvoiceBuilder({
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div>
               <p className="font-sans text-xs font-normal text-foreground-muted">N° document</p>
-              <p className="mt-1 font-bold text-cobalt">{previewCode}</p>
+              <p className="mt-1 font-bold text-primary">{previewCode}</p>
             </div>
             <label className="font-sans text-xs font-normal text-foreground-muted">
               Date d’émission

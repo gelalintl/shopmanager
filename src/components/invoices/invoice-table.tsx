@@ -153,7 +153,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                           href={`/dashboard/invoices/${doc.estimationPublicId}`}
                           title="Consulter"
                           aria-label="Consulter"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
                         >
                           <IconEye className="h-4 w-4" />
                         </Link>
@@ -162,7 +162,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                           target="_blank"
                           title={doc.kind === 'ESTIMATION' ? (isProformaStatus(doc.status) ? 'Imprimer la proforma' : 'Imprimer le devis') : 'Imprimer la facture'}
                           aria-label={doc.kind === 'ESTIMATION' ? (isProformaStatus(doc.status) ? 'Imprimer la proforma' : 'Imprimer le devis') : 'Imprimer la facture'}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
                         >
                           <IconPrinter className="h-4 w-4" />
                         </Link>
@@ -172,7 +172,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                             title="Convertir en devis"
                             aria-label="Convertir en devis"
                             disabled={quotePromoteId === doc.estimationPublicId}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt disabled:opacity-50"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10 disabled:opacity-50"
                             onClick={() => {
                               void (async () => {
                                 setQuotePromoteId(doc.estimationPublicId)
@@ -194,7 +194,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                             type="button"
                             title="Transformer en facture"
                             aria-label="Transformer en facture"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
                             onClick={() => setConvertId(doc.estimationPublicId)}
                           >
                             <IconArrowRightLeft className="h-4 w-4" />
@@ -216,7 +216,7 @@ export function InvoiceTable({ documents }: InvoiceTableProps) {
                             type="button"
                             title="Action rapide"
                             aria-label="Enregistrer un règlement"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
                             onClick={() => setPayId(doc.invoicePublicId)}
                           >
                             <IconCheckCircle className="h-4 w-4" />

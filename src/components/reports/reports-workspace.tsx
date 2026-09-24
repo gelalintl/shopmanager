@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Caption, Text } from '@/components/ui/typography'
 import { ReportsFilters } from '@/components/reports/reports-filters'
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
+import { SummaryCards } from '@/components/dashboard/stats-card'
 import { downloadCsv } from '@/lib/csv'
 import { formatCfa, formatFrDate } from '@/lib/invoices'
 import { rangeToInputs, reportRange, type ProductSaleRow, type ReceivableRow, type ReportPreset, type ReportTab, type SalesReport, type VatRow } from '@/lib/analytics'
@@ -144,8 +145,8 @@ export function ReportsWorkspace({
               className={cn(
                 'rounded-full border px-3 py-1.5 text-sm font-bold transition-all duration-200',
                 tab === item.id
-                  ? 'border-cobalt bg-cobalt text-white'
-                  : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
               )}
             >
               {item.label}
@@ -173,7 +174,7 @@ export function ReportsWorkspace({
 function SalesPanel({ sales }: { sales: SalesReport }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi title="CA facturé" value={formatCfa(sales.billed)} />
         <Kpi title="CA encaissé" value={formatCfa(sales.collected)} />
         <Kpi title="Factures" value={String(sales.invoiceCount)} hint={`${sales.estimationCount} devis`} />
@@ -182,7 +183,7 @@ function SalesPanel({ sales }: { sales: SalesReport }) {
           value={`${Math.round(sales.conversionRate * 100)} %`}
           hint={`Remises ${formatCfa(sales.discountTotal)}`}
         />
-      </div>
+      </SummaryCards>
       <RevenueChart points={sales.history} caption="Évolution facturé vs encaissé" />
     </div>
   )
@@ -213,7 +214,7 @@ function ReceivablesPanel({ rows }: { rows: ReceivableRow[] }) {
               rows.map((row) => (
                 <tr key={row.customerPublicId} className="border-b border-subtle-border last:border-0">
                   <td className="overflow-hidden px-4 py-3">
-                    <Link href={`/dashboard/customers/${row.customerPublicId}`} className="font-bold text-cobalt hover:underline">
+                    <Link href={`/dashboard/customers/${row.customerPublicId}`} className="font-bold text-primary hover:underline">
                       {row.customerName}
                     </Link>
                     <Caption className="block">
@@ -277,11 +278,11 @@ function ProductsPanel({ rows }: { rows: ProductSaleRow[] }) {
 function VatPanel({ vat }: { vat: { rows: VatRow[]; ht: number; vat: number; ttc: number } }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <SummaryCards className="grid gap-4 sm:grid-cols-3">
         <Kpi title="Base HT" value={formatCfa(vat.ht)} />
         <Kpi title="TVA collectée" value={formatCfa(vat.vat)} />
         <Kpi title="TTC" value={formatCfa(vat.ttc)} />
-      </div>
+      </SummaryCards>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] table-fixed text-left">
@@ -306,7 +307,7 @@ function VatPanel({ vat }: { vat: { rows: VatRow[]; ht: number; vat: number; ttc
                 vat.rows.map((row) => (
                   <tr key={row.invoicePublicId} className="border-b border-subtle-border last:border-0">
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/invoices/${row.estimationPublicId}`} className="font-bold text-cobalt hover:underline">
+                      <Link href={`/dashboard/invoices/${row.estimationPublicId}`} className="font-bold text-primary hover:underline">
                         {row.code}
                       </Link>
                     </td>

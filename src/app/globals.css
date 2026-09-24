@@ -1,3 +1,4 @@
+@config "../../tailwind.config.ts";
 @import "tailwindcss";
 
 :root {
@@ -9,8 +10,9 @@
   --foreground-muted: #64748b;
   --cobalt: #1d4ed8;
   --cobalt-hover: #1e40af;
-  --primary: var(--cobalt);
-  --primary-hover: var(--cobalt-hover);
+  --primary-color: #1e40af;
+  --primary: var(--primary-color, #1e40af);
+  --primary-hover: color-mix(in srgb, var(--primary-color, #1e40af) 82%, black);
   --danger: #dc6b6b;
 }
 
@@ -25,10 +27,10 @@
   --color-foreground-muted: var(--foreground-muted);
   --color-cobalt: var(--cobalt);
   --color-cobalt-hover: var(--cobalt-hover);
-  --color-primary: var(--primary);
+  --color-primary: var(--primary-color, #1e40af);
   --color-primary-hover: var(--primary-hover);
   --color-danger: var(--danger);
-  --color-ring: var(--cobalt);
+  --color-ring: var(--primary-color, #1e40af);
 }
 
 html,
@@ -42,6 +44,13 @@ body {
   @page {
     size: A4;
     margin: 0;
+  }
+
+  html,
+  body,
+  .print-container {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   html,

@@ -9,7 +9,7 @@ export function LoginCard() {
       <div className="flex w-full flex-col px-[clamp(2rem,6vw,4.5rem)] pb-10 pt-[clamp(3rem,20vh,8rem)] md:w-5/12">
         <CardHeader className="pb-2 pt-[7px]">
           <BrandLogo size="sm" className="mb-8" />
-          <Heading as="h1" color="primary" className="text-[36px] leading-tight max-md:text-[34px]">
+          <Heading as="h1" className="text-[36px] leading-tight text-cobalt max-md:text-[34px]">
             Connexion
           </Heading>
           <Text variant="muted" size="sm" className="mt-1">

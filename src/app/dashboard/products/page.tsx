@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
-import { StatsCard } from '@/components/dashboard/stats-card'
+import { StatsCard, SummaryCards } from '@/components/dashboard/stats-card'
 import { ProductCatalog } from '@/components/products/product-catalog'
 import { getProducts } from '@/app/dashboard/products/actions'
 import { formatCfa, type StockFilter } from '@/lib/products'
@@ -35,7 +35,7 @@ export default async function ProductsPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatsCard title="Total produits" value={String(result.productCount)} hint="Références actives" />
         <StatsCard title="Valeur totale du stock" value={formatCfa(result.stockValue)} hint="Quantité × PU" />
         <StatsCard
@@ -44,7 +44,7 @@ export default async function ProductsPage({
           hint="Seuil atteint ou rupture"
           tone="warning"
         />
-      </div>
+      </SummaryCards>
 
       <Suspense fallback={null}>
         <ProductCatalog

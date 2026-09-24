@@ -12,11 +12,11 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClass: Record<ButtonVariant, string> = {
   solid:
-    'bg-cobalt text-white hover:bg-cobalt-hover border border-transparent',
+    'bg-primary text-white hover:bg-primary-hover border border-transparent',
   outline:
-    'bg-transparent text-cobalt border border-cobalt hover:bg-white',
+    'bg-transparent text-primary border border-primary hover:bg-white',
   secondary:
-    'bg-soft-cobalt text-cobalt border border-soft-cobalt-strong hover:bg-white',
+    'bg-primary/10 text-primary border border-primary/20 hover:bg-white',
   danger:
     'bg-danger text-white border border-transparent hover:bg-red-500',
 }

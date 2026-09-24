@@ -35,7 +35,7 @@ export const InvoiceLineRow = memo(function InvoiceLineRow({
             type="button"
             title="Nouveau produit rapide"
             aria-label="Nouveau produit rapide"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
             onClick={() => onQuickAdd(line.key)}
           >
             <IconPlus className="h-4 w-4" />

@@ -106,10 +106,10 @@ export function InvoiceWorkspace({
                 tab === item.id
                   ? item.id === 'cancellations'
                     ? 'border-red-700 bg-red-700 text-white'
-                    : 'border-cobalt bg-cobalt text-white'
+                    : 'border-primary bg-primary text-white'
                   : item.id === 'cancellations'
                     ? 'border-red-200 bg-red-50 text-red-800 hover:border-red-400'
-                    : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                    : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
               )}
             >
               {item.label}

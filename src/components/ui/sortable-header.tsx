@@ -49,14 +49,14 @@ export function SortableHeader({
       <button
         type="button"
         onClick={toggle}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-md text-left transition-all duration-200 hover:text-cobalt focus:outline-none focus-visible:ring-2 focus-visible:ring-cobalt"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-md text-left transition-all duration-200 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         <span className="truncate">{label}</span>
         <span className="inline-flex shrink-0 flex-col leading-none" aria-hidden="true">
-          <svg viewBox="0 0 12 8" className={cn('h-2 w-2.5', active && currentDir === 'asc' ? 'text-cobalt' : 'text-foreground-muted/35')} fill="currentColor">
+          <svg viewBox="0 0 12 8" className={cn('h-2 w-2.5', active && currentDir === 'asc' ? 'text-primary' : 'text-foreground-muted/35')} fill="currentColor">
             <path d="M6 1.2 10.5 6.5H1.5Z" />
           </svg>
-          <svg viewBox="0 0 12 8" className={cn('-mt-0.5 h-2 w-2.5', active && currentDir === 'desc' ? 'text-cobalt' : 'text-foreground-muted/35')} fill="currentColor">
+          <svg viewBox="0 0 12 8" className={cn('-mt-0.5 h-2 w-2.5', active && currentDir === 'desc' ? 'text-primary' : 'text-foreground-muted/35')} fill="currentColor">
             <path d="M6 6.8 1.5 1.5h9Z" />
           </svg>
         </span>

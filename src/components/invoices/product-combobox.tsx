@@ -161,7 +161,7 @@ export function ProductCombobox({ value, placeholder, onQueryChange, onSelect }:
                     data-active={active ? 'true' : undefined}
                     className={cn(
                       'block w-full px-3 py-2 text-left font-sans text-sm transition-all duration-200',
-                      active ? 'bg-soft-cobalt text-cobalt' : 'text-foreground hover:bg-soft-cobalt/70',
+                      active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-primary/10',
                     )}
                     onMouseEnter={() => setHighlight(index)}
                     onMouseDown={(event) => event.preventDefault()}

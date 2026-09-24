@@ -1,5 +1,5 @@
 import { CompanyBrand, PrintGeneratedBy } from '@/components/print/company-brand'
-import { printAccentVars, type PrintCompany, type PrintCustomer, type PrintSettings } from '@/lib/invoices'
+import { printAccentVars, resolveSignatoryTitle, type PrintCompany, type PrintCustomer, type PrintSettings } from '@/lib/invoices'
 import { cn } from '@/lib/cn'
 
 export type DeliveryLine = {
@@ -114,13 +114,11 @@ export function DeliveryNoteTemplate({
         </tbody>
       </table>
 
-      <p className="mt-6 text-sm text-foreground-muted">
-        Document de livraison uniquement — aucun règlement n’y figure.
-      </p>
-
       <div className="mt-auto grid grid-cols-2 gap-6 pt-12">
         <div className="min-h-36 rounded-xl border border-subtle-border p-4">
-          <p className="text-xs font-bold tracking-wide text-cobalt uppercase">Nom & Signature Livreur</p>
+          <p className="text-xs font-bold tracking-wide text-cobalt uppercase">
+            {resolveSignatoryTitle(company.signatoryTitle)}
+          </p>
           <p className="mt-16 border-t border-subtle-border pt-2 text-xs text-foreground-muted">Nom / Signature</p>
         </div>
         <div className="min-h-36 rounded-xl border border-subtle-border p-4">

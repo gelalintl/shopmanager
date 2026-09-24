@@ -29,7 +29,7 @@ export function RecentActivityFeed({ items }: RecentActivityFeedProps) {
             <li key={item.id} className="flex items-start justify-between gap-3 border-b border-subtle-border pb-3 last:border-0 last:pb-0">
               <div className="min-w-0">
                 <Caption className="block uppercase">{kindLabel[item.kind]}</Caption>
-                <Link href={item.href} className="font-bold text-cobalt hover:underline">
+                <Link href={item.href} className="font-bold text-primary hover:underline">
                   {item.title}
                 </Link>
                 <Caption className="block">

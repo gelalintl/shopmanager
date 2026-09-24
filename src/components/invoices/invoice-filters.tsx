@@ -5,7 +5,7 @@ import { IconSearch } from '@/components/ui/icons'
 
 const labelClass = 'block text-xs font-medium text-slate-600 mb-1'
 const fieldClass =
-  'h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  'h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
 
 export type InvoiceFilterValues = {
   startDate: string

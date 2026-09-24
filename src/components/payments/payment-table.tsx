@@ -88,7 +88,7 @@ export function PaymentTable({ entries }: PaymentTableProps) {
                   <td className="overflow-hidden px-4 py-3 align-middle">
                     <Link
                       href={`/dashboard/invoices/${entry.estimationPublicId}`}
-                      className="font-bold text-cobalt hover:underline"
+                      className="font-bold text-primary hover:underline"
                     >
                       {entry.invoiceCode}
                     </Link>
@@ -127,7 +127,7 @@ export function PaymentTable({ entries }: PaymentTableProps) {
                         target="_blank"
                         title="Imprimer le reçu"
                         aria-label="Imprimer le reçu"
-                        className={cn(iconBtn, 'text-cobalt hover:bg-soft-cobalt')}
+                        className={cn(iconBtn, 'text-primary hover:bg-primary/10')}
                       >
                         <IconPrinter className="h-4 w-4" />
                       </Link>

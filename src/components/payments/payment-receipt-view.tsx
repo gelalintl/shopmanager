@@ -19,7 +19,7 @@ export function PaymentReceiptView({ receipt, autoPrint = false }: PaymentReceip
   }, [autoPrint])
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-powder print:static print:bg-white">
+    <div className="print-container fixed inset-0 z-50 overflow-auto bg-powder print:static print:bg-white">
       <div className="no-print sticky top-0 z-10 flex items-center justify-between border-b border-subtle-border bg-white px-4 py-3">
         <Link href="/dashboard/payments">
           <Button variant="outline">Retour</Button>

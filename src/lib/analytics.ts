@@ -195,7 +195,7 @@ export function formatCompactCfa(amount: number) {
 
 export const filterLabelClass = 'block text-xs font-medium text-slate-600 mb-1'
 export const filterFieldClass =
-  'h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  'h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
 
 export function lineFinancials(
   items: Array<{ unitPrice: bigint | number; quantity: number; discountRate: number; totalPrice: bigint | number }>,

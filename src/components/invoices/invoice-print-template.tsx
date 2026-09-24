@@ -6,6 +6,7 @@ import {
   globalDiscountLabel,
   isProformaStatus,
   printAccentVars,
+  resolveSignatoryTitle,
   TVA_RATE,
   type DocumentKind,
   type DocumentStatus,
@@ -273,6 +274,14 @@ export function InvoicePrintTemplate({
         ) : null}
         {settings.showLegalMentions && company.legalMentions ? <p>{company.legalMentions}</p> : null}
         {footerText ? <p>{footerText}</p> : null}
+        <div className="flex justify-end pt-4">
+          <div className="min-h-32 w-56 rounded-xl border border-subtle-border p-4 text-foreground">
+            <p className="text-xs font-bold tracking-wide text-cobalt uppercase">
+              {resolveSignatoryTitle(company.signatoryTitle)}
+            </p>
+            <p className="mt-16 border-t border-subtle-border pt-2 text-xs text-foreground-muted">Nom / Signature</p>
+          </div>
+        </div>
         {copyLabel ? (
           <div className="pt-2">
             <PrintCopyBadge label={copyLabel} />

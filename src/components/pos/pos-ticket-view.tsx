@@ -31,7 +31,7 @@ export function PosTicketView({ ticket, format, autoPrint = false }: PosTicketVi
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-powder print:static print:bg-white">
+    <div className="print-container fixed inset-0 z-50 overflow-auto bg-powder print:static print:bg-white">
       <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-subtle-border bg-white px-4 py-3">
         <Link href="/dashboard/pos">
           <Button variant="outline">Retour à la caisse</Button>

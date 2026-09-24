@@ -1,10 +1,11 @@
 import {
   defaultPrintSettings,
   parsePrintSettings,
+  resolveSignatoryTitle,
   type PrintCompany,
   type PrintSettings,
 } from '@/lib/invoices'
-import { getCompanyLogo, normalizeLogoDataUri } from '@/lib/site-settings'
+import { getCompanyLogo, getDeliverySignatoryTitle, normalizeLogoDataUri } from '@/lib/site-settings'
 
 export type SettingsTab = 'profile' | 'fiscal' | 'print' | 'account'
 
@@ -40,6 +41,8 @@ export type PrintSettingsInput = {
   showQuantity?: boolean
   showUnitPrice?: boolean
   showLineTotal?: boolean
+  signatoryTitle?: string
+  primaryColor?: string
 }
 
 export type AccountProfileInput = {
@@ -67,6 +70,8 @@ export type SettingsPayload = {
   company: SettingsCompany
   print: PrintSettings
   account: SettingsAccount
+  signatoryTitle: string
+  primaryColor: string
 }
 
 const TABS: SettingsTab[] = ['profile', 'fiscal', 'print', 'account']
@@ -100,6 +105,7 @@ export function toPrintCompany(
     printSettings?: unknown
   },
   logoDataUri?: string | null,
+  signatoryTitle?: string | null,
 ): PrintCompany {
   const extras = parsePrintSettings(company.printSettings)
   const logo = normalizeLogoDataUri(logoDataUri) ?? normalizeLogoDataUri(company.logoPath)
@@ -119,6 +125,7 @@ export function toPrintCompany(
     slogan: company.slogan,
     logoPath: logo,
     logoUrl: logo,
+    signatoryTitle: resolveSignatoryTitle(signatoryTitle),
   }
 }
 
@@ -137,8 +144,11 @@ export async function loadPrintCompany(company: {
   logoPath?: string | null
   printSettings?: unknown
 }): Promise<PrintCompany> {
-  const logo = await getCompanyLogo(company.id)
-  return toPrintCompany(company, logo)
+  const [logo, signatoryTitle] = await Promise.all([
+    getCompanyLogo(company.id),
+    getDeliverySignatoryTitle(company.id),
+  ])
+  return toPrintCompany(company, logo, signatoryTitle)
 }
 
 export function settingsFromCompany(printSettings: unknown): PrintSettings {

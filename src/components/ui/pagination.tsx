@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/cn'
 
 const selectClass =
-  'h-9 rounded-lg border border-subtle-border bg-white px-2 text-sm font-bold text-foreground focus:border-cobalt focus:outline-none focus:ring-1 focus:ring-cobalt'
+  'h-9 rounded-lg border border-subtle-border bg-white px-2 text-sm font-bold text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
 
 type PaginationProps = {
   totalCount: number
@@ -108,7 +108,7 @@ export function Pagination({ totalCount, currentPage, limit, persistSize = true 
             'inline-flex h-9 w-9 items-center justify-center rounded-full border border-subtle-border bg-white text-foreground transition-all duration-200',
             page <= 1
               ? 'cursor-not-allowed opacity-40'
-              : 'hover:border-cobalt hover:text-cobalt',
+              : 'hover:border-primary hover:text-primary',
           )}
         >
           <ChevronLeft className="h-4 w-4" />
@@ -126,8 +126,8 @@ export function Pagination({ totalCount, currentPage, limit, persistSize = true 
               className={cn(
                 'inline-flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-bold transition-all duration-200',
                 item === page
-                  ? 'bg-cobalt text-white'
-                  : 'border border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                  ? 'bg-primary text-white'
+                  : 'border border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
               )}
               aria-current={item === page ? 'page' : undefined}
             >
@@ -145,7 +145,7 @@ export function Pagination({ totalCount, currentPage, limit, persistSize = true 
             'inline-flex h-9 w-9 items-center justify-center rounded-full border border-subtle-border bg-white text-foreground transition-all duration-200',
             page >= totalPages
               ? 'cursor-not-allowed opacity-40'
-              : 'hover:border-cobalt hover:text-cobalt',
+              : 'hover:border-primary hover:text-primary',
           )}
         >
           <ChevronRight className="h-4 w-4" />

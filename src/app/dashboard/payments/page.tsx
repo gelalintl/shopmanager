@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
-import { StatsCard } from '@/components/dashboard/stats-card'
+import { StatsCard, SummaryCards } from '@/components/dashboard/stats-card'
 import { PaymentJournal } from '@/components/payments/payment-journal'
 import { getPaymentsJournal } from '@/app/dashboard/payments/actions'
 import { formatCfa } from '@/lib/invoices'
@@ -58,7 +58,7 @@ export default async function PaymentsPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatsCard
           title="Total encaissé (mois)"
           value={formatCfa(journal.monthTotal)}
@@ -76,7 +76,7 @@ export default async function PaymentsPage({
           hint="Factures non soldées"
           tone={journal.outstanding > 0 ? 'warning' : 'success'}
         />
-      </div>
+      </SummaryCards>
       <Suspense fallback={null}>
         <PaymentJournal
           entries={journal.entries}

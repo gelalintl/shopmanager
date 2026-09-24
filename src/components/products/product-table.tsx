@@ -84,13 +84,13 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                         </Text>
                         <Caption className="mt-0.5 block">{product.code}</Caption>
                         {service ? (
-                          <Caption className="mt-0.5 block text-cobalt">Prestation</Caption>
+                          <Caption className="mt-0.5 block text-primary">Prestation</Caption>
                         ) : null}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">{formatCfa(product.unitPrice)}</td>
                       <td className="px-4 py-3">
                         {service ? (
-                          <span className="inline-flex items-center rounded-full bg-soft-cobalt px-2.5 py-1 text-sm font-bold text-cobalt">
+                          <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
                             Service
                           </span>
                         ) : (

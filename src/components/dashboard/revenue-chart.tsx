@@ -26,8 +26,8 @@ export function RevenueChart({ points, caption = '12 derniers mois' }: RevenueCh
           <Caption className="mt-0.5 block">{caption}</Caption>
         </div>
         <div className="flex gap-3 text-xs font-bold">
-          <span className="flex items-center gap-1.5 text-cobalt">
-            <span className="h-2 w-2 rounded-full bg-cobalt" /> Facturé
+          <span className="flex items-center gap-1.5 text-primary">
+            <span className="h-2 w-2 rounded-full bg-primary" /> Facturé
           </span>
           <span className="flex items-center gap-1.5 text-emerald-600">
             <span className="h-2 w-2 rounded-full bg-emerald-500" /> Encaissé
@@ -50,7 +50,7 @@ export function RevenueChart({ points, caption = '12 derniers mois' }: RevenueCh
                   width={barW}
                   height={billedH}
                   rx="3"
-                  className="fill-cobalt"
+                  className="fill-primary"
                 />
                 <rect
                   x={x + 2}

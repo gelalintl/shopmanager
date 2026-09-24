@@ -43,7 +43,7 @@ export function OverdueInvoicesWidget({ invoices }: OverdueInvoicesWidgetProps) 
               {invoices.map((invoice) => (
                 <tr key={invoice.invoicePublicId} className="border-t border-subtle-border">
                   <td className="px-5 py-3">
-                    <Link href={`/dashboard/invoices/${invoice.estimationPublicId}`} className="font-bold text-cobalt hover:underline">
+                    <Link href={`/dashboard/invoices/${invoice.estimationPublicId}`} className="font-bold text-primary hover:underline">
                       {invoice.code}
                     </Link>
                     <Caption className="block">{invoice.customerName}</Caption>

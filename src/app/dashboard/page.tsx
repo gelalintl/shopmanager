@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { getDashboardAnalytics } from '@/app/dashboard/actions'
-import { StatsCard } from '@/components/dashboard/stats-card'
+import { StatsCard, SummaryCards } from '@/components/dashboard/stats-card'
 import { DashboardHeader } from '@/components/dashboard/dashboard-header'
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { PaymentMethodsDonut } from '@/components/dashboard/payment-methods-donut'
@@ -77,7 +77,7 @@ export default async function DashboardPage({
         />
       </Suspense>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryCards className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatsCard
           title="CA encaissé (mois)"
           value={formatCfa(analytics.monthCollected)}
@@ -104,7 +104,7 @@ export default async function DashboardPage({
           hint="Collections du jour"
           icon={<IconToday />}
         />
-      </div>
+      </SummaryCards>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">

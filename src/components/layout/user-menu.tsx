@@ -42,12 +42,12 @@ export function UserMenu() {
         onClick={() => setOpen((value) => !value)}
         className={cn(
           'flex items-center gap-3 rounded-full py-1 pr-2 pl-1',
-          'transition-all duration-200 hover:bg-soft-cobalt',
+          'transition-all duration-200 hover:bg-primary/10',
         )}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cobalt text-sm font-bold text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
           {initialsFrom(user?.name, user?.pseudo)}
         </span>
         <span className="hidden text-left sm:block">
@@ -65,7 +65,7 @@ export function UserMenu() {
         >
           <Text weight="bold">{displayName}</Text>
           <Caption className="mt-0.5 block">{role}</Caption>
-          <Caption className="mt-1 block text-cobalt">{company}</Caption>
+          <Caption className="mt-1 block text-primary">{company}</Caption>
           <Button
             variant="outline"
             size="sm"

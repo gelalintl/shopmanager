@@ -184,7 +184,7 @@ export function Sidebar() {
             onClick={() => persistCollapsed(false)}
             title="Agrandir le menu"
             aria-label="Agrandir le menu"
-            className="rounded-lg p-0.5 transition-all duration-200 hover:bg-soft-cobalt"
+            className="rounded-lg p-0.5 transition-all duration-200 hover:bg-primary/10"
           >
             <BrandLogo size="sm" showLabel={false} />
           </button>
@@ -197,7 +197,7 @@ export function Sidebar() {
           title={collapsed ? 'Agrandir le menu' : 'Réduire le menu'}
           aria-label={collapsed ? 'Agrandir le menu' : 'Réduire le menu'}
           aria-expanded={!collapsed}
-          className="rounded-md p-1.5 text-foreground-muted transition-all duration-200 hover:bg-soft-cobalt hover:text-cobalt"
+          className="rounded-md p-1.5 text-foreground-muted transition-all duration-200 hover:bg-primary/10 hover:text-primary"
         >
           {collapsed ? (
             <IconChevronRight className="h-5 w-5" />
@@ -223,12 +223,12 @@ export function Sidebar() {
                     'transition-all duration-200',
                     collapsed ? 'justify-center px-0' : 'px-3',
                     active
-                      ? 'bg-soft-cobalt text-cobalt'
-                      : 'text-foreground hover:bg-soft-cobalt/70 hover:text-cobalt',
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-primary/10 hover:text-primary',
                   )}
                 >
                   {active ? (
-                    <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-cobalt" />
+                    <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-primary" />
                   ) : null}
                   {Icon ? <Icon className="h-5 w-5 shrink-0" /> : null}
                   {collapsed ? <span className="sr-only">{item.label}</span> : item.label}

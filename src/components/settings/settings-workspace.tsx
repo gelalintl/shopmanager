@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, type FormEvent, useState } from 'react'
+import { useCallback, type FormEvent, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,12 @@ import {
   updatePassword,
   updatePrintSettings,
 } from '@/app/dashboard/settings/actions'
-import { computeTotals, DEFAULT_PRINT_ACCENT, type PrintSettings } from '@/lib/invoices'
+import { computeTotals, DEFAULT_PRINT_ACCENT, DEFAULT_PRIMARY_COLOR, DEFAULT_SIGNATORY_TITLE, type PrintSettings } from '@/lib/invoices'
 import type { SettingsPayload, SettingsTab } from '@/lib/settings'
 import { roleLabels } from '@/lib/auth'
 import { toastResult } from '@/lib/notify'
 import { toast } from 'sonner'
+import { RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const MAX_LOGO_BYTES = 1_800_000
@@ -84,8 +85,8 @@ export function SettingsWorkspace({ tab, settings }: SettingsWorkspaceProps) {
             className={cn(
               'rounded-full border px-3 py-1.5 text-sm font-bold transition-all duration-200',
               tab === item.id
-                ? 'border-cobalt bg-cobalt text-white'
-                : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                ? 'border-primary bg-primary text-white'
+                : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
             )}
           >
             {item.label}
@@ -98,7 +99,12 @@ export function SettingsWorkspace({ tab, settings }: SettingsWorkspaceProps) {
       ) : null}
       {tab === 'fiscal' ? <FiscalForm company={settings.company} /> : null}
       {tab === 'print' ? (
-        <PrintForm company={settings.company} print={settings.print} />
+        <PrintForm
+          company={settings.company}
+          print={settings.print}
+          signatoryTitle={settings.signatoryTitle}
+          primaryColor={settings.primaryColor}
+        />
       ) : null}
       {tab === 'account' ? (
         <AccountForm
@@ -260,9 +266,13 @@ function FiscalForm({ company }: { company: SettingsPayload['company'] }) {
 function PrintForm({
   company,
   print,
+  signatoryTitle: initialSignatoryTitle,
+  primaryColor: initialPrimaryColor,
 }: {
   company: SettingsPayload['company']
   print: PrintSettings
+  signatoryTitle: string
+  primaryColor: string
 }) {
   const [loading, setLoading] = useState(false)
   const [legalMentions, setLegalMentions] = useState(company.legalMentions ?? '')
@@ -270,6 +280,8 @@ function PrintForm({
   const [accentColor, setAccentColor] = useState(print.accentColor || DEFAULT_PRINT_ACCENT)
   const [defaultPaymentTerms, setDefaultPaymentTerms] = useState(print.defaultPaymentTerms)
   const [defaultWarrantyMonths, setDefaultWarrantyMonths] = useState(print.defaultWarrantyMonths)
+  const [signatoryTitle, setSignatoryTitle] = useState(initialSignatoryTitle || DEFAULT_SIGNATORY_TITLE)
+  const [primaryColor, setPrimaryColor] = useState(initialPrimaryColor || DEFAULT_PRIMARY_COLOR)
   const [flags, setFlags] = useState({
     showRib: print.showRib,
     showLegalMentions: print.showLegalMentions,
@@ -279,6 +291,17 @@ function PrintForm({
     showLineTotal: print.showLineTotal,
   })
 
+  useEffect(() => {
+    const shell = document.querySelector('[data-dashboard-shell]')
+    if (!(shell instanceof HTMLElement)) return
+    shell.style.setProperty('--primary-color', primaryColor || DEFAULT_PRIMARY_COLOR)
+  }, [primaryColor])
+
+  function resetPrimaryColor() {
+    setPrimaryColor(DEFAULT_PRIMARY_COLOR)
+    toast.success('Couleur réinitialisée au bleu cobalt par défaut')
+  }
+
   const liveSettings: PrintSettings = {
     ...print,
     ...flags,
@@ -287,7 +310,7 @@ function PrintForm({
     defaultPaymentTerms,
     defaultWarrantyMonths,
   }
-  const liveCompany = { ...company, legalMentions: legalMentions || null }
+  const liveCompany = { ...company, legalMentions: legalMentions || null, signatoryTitle }
   const previewTotals = computeTotals([{ unitPrice: 25000, quantity: 2, discountRate: 0 }], true, 0)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -299,6 +322,8 @@ function PrintForm({
       accentColor,
       defaultPaymentTerms,
       defaultWarrantyMonths,
+      signatoryTitle,
+      primaryColor,
       ...flags,
     })
     setLoading(false)
@@ -318,6 +343,13 @@ function PrintForm({
               onChange={(event) => setLegalMentions(event.target.value)}
             />
           </label>
+          <InputField
+            id="signatoryTitle"
+            label="Intitulé du signataire (BL/Factures)"
+            value={signatoryTitle}
+            onChange={(event) => setSignatoryTitle(event.target.value)}
+            placeholder={DEFAULT_SIGNATORY_TITLE}
+          />
           <label className="flex flex-col">
             <span className="mt-2.5 mb-1 font-sans text-sm font-bold">Pied de page A4</span>
             <textarea
@@ -347,13 +379,35 @@ function PrintForm({
               onChange={(event) => setDefaultWarrantyMonths(Number(event.target.value) || 0)}
             />
             <label className="flex flex-col">
-              <span className="mt-2.5 mb-1 font-sans text-sm font-bold">Couleur d’accentuation</span>
+              <span className="mt-2.5 mb-1 font-sans text-sm font-bold">Couleur d’accentuation (impressions)</span>
               <input
                 type="color"
                 className="h-10 w-full cursor-pointer rounded-md border border-subtle-border"
                 value={accentColor}
                 onChange={(event) => setAccentColor(event.target.value)}
               />
+            </label>
+            <label className="flex flex-col sm:col-span-2">
+              <span className="mt-2.5 mb-1 font-sans text-sm font-bold">Couleur primaire (tableau de bord)</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="color"
+                  className="h-10 w-24 cursor-pointer rounded-md border border-subtle-border bg-white"
+                  value={primaryColor}
+                  onChange={(event) => setPrimaryColor(event.target.value)}
+                  aria-label="Couleur primaire du tableau de bord"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={resetPrimaryColor}
+                  className="shrink-0"
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Couleur par défaut
+                </Button>
+              </div>
             </label>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">

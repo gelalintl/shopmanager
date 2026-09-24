@@ -44,8 +44,8 @@ export function CustomerFilters({
             className={cn(
               'rounded-full border px-3 py-1.5 text-sm font-bold transition-all duration-200',
               type === filter.id
-                ? 'border-cobalt bg-cobalt text-white'
-                : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                ? 'border-primary bg-primary text-white'
+                : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
             )}
           >
             {filter.label}

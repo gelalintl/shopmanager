@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn'
 import { Caption } from '@/components/ui/typography'
 
 export const controlClass =
-  'w-full min-h-10 rounded-md border border-subtle-border bg-white px-3 py-2 font-sans text-lg font-normal placeholder:text-foreground-muted/70 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cobalt disabled:cursor-not-allowed disabled:bg-powder disabled:opacity-70'
+  'w-full min-h-10 rounded-md border border-subtle-border bg-white px-3 py-2 font-sans text-lg font-normal placeholder:text-foreground-muted/70 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-powder disabled:opacity-70'
 
 export const quietControlClass =
   'w-full min-h-9 rounded-md border border-slate-200 bg-white/80 px-2 py-1.5 font-sans text-sm font-normal text-foreground-muted transition-all duration-200 focus:outline-none focus:border-slate-300 focus:ring-1 focus:ring-slate-200'

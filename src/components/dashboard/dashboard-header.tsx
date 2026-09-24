@@ -55,8 +55,8 @@ export function DashboardHeader({ name, company, todayLabel, period }: Dashboard
             className={cn(
               'rounded-full border px-3 py-1.5 text-sm font-bold transition-all duration-200',
               period === item.id
-                ? 'border-cobalt bg-cobalt text-white'
-                : 'border-subtle-border bg-white text-foreground hover:border-cobalt hover:text-cobalt',
+                ? 'border-primary bg-primary text-white'
+                : 'border-subtle-border bg-white text-foreground hover:border-primary hover:text-primary',
             )}
           >
             {item.label}
@@ -64,7 +64,7 @@ export function DashboardHeader({ name, company, todayLabel, period }: Dashboard
         ))}
         <Link
           href="/dashboard/reports"
-          className="rounded-full border border-subtle-border bg-white px-3 py-1.5 text-sm font-bold text-cobalt hover:border-cobalt"
+          className="rounded-full border border-subtle-border bg-white px-3 py-1.5 text-sm font-bold text-primary hover:border-primary"
         >
           Rapports
         </Link>

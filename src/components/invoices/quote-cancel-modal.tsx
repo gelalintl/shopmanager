@@ -58,7 +58,7 @@ export function QuoteCancelModal({
             name="reason"
             rows={4}
             placeholder="Ex. : client a changé d’avis, erreur de saisie…"
-            className="w-full rounded-md border border-subtle-border bg-white px-3 py-2 font-sans text-base focus:outline-none focus:ring-2 focus:ring-cobalt"
+            className="w-full rounded-md border border-subtle-border bg-white px-3 py-2 font-sans text-base focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <div className="mt-4 flex gap-3">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>

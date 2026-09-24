@@ -88,6 +88,7 @@ export function LoginForm() {
           onChange={(event) => setPseudo(event.target.value)}
           error={fieldErrors.pseudo}
           disabled={loading}
+          className="focus:ring-cobalt"
         />
       </div>
 
@@ -103,6 +104,7 @@ export function LoginForm() {
           onChange={(event) => setPassword(event.target.value)}
           error={fieldErrors.password}
           disabled={loading}
+          className="focus:ring-cobalt"
           trailing={
             <button
               type="button"
@@ -121,7 +123,7 @@ export function LoginForm() {
         variant="solid"
         size="lg"
         isLoading={loading}
-        className="w-full uppercase"
+        className="w-full uppercase bg-cobalt hover:bg-cobalt-hover"
       >
         Connexion
       </Button>

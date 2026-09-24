@@ -287,8 +287,8 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
       {props.invoicePublicId ? (
         <Card className="p-5">
           <Text weight="bold">Suivi des règlements</Text>
-          <div className="mt-3 h-3 overflow-hidden rounded-full bg-soft-cobalt">
-            <div className="h-full rounded-full bg-cobalt transition-all duration-200" style={{ width: `${progress}%` }} />
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-primary/10">
+            <div className="h-full rounded-full bg-primary transition-all duration-200" style={{ width: `${progress}%` }} />
           </div>
           <Caption className="mt-2 block">
             {formatCfa(props.paidAmount)} / {formatCfa(props.totals.ttc)} ({progress} %) — reste {formatCfa(props.remaining)}
@@ -302,7 +302,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
                   <div>
                     <Text size="sm" weight="bold">{formatCfa(payment.amount)}</Text>
                     {payment.note ? <Caption className="block">{payment.note}</Caption> : null}
-                    <Link href={`/dashboard/payments/${payment.publicId}/print`} target="_blank" className="text-sm font-bold text-cobalt hover:underline">
+                    <Link href={`/dashboard/payments/${payment.publicId}/print`} target="_blank" className="text-sm font-bold text-primary hover:underline">
                       Reçu
                     </Link>
                   </div>
@@ -337,7 +337,7 @@ export function InvoiceDetail(props: InvoiceDetailProps) {
                     <Link
                       href={`/dashboard/invoices/credit-notes/${note.publicId}/print?format=ticket`}
                       target="_blank"
-                      className="text-sm font-bold text-cobalt hover:underline"
+                      className="text-sm font-bold text-primary hover:underline"
                     >
                       Imprimer le reçu d’avoir
                     </Link>

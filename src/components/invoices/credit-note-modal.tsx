@@ -85,7 +85,7 @@ export function CreditNoteModal({
             ))}
           </select>
           <label className="mt-4 flex items-start gap-2 text-sm">
-            <input type="checkbox" name="restock" className="mt-1 h-4 w-4 accent-cobalt" />
+            <input type="checkbox" name="restock" className="mt-1 h-4 w-4 accent-primary" />
             <span>
               <span className="font-bold">Réintégrer les articles en stock</span>
               <Caption className="block">Crée un mouvement d’entrée pour les lignes de la facture.</Caption>

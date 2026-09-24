@@ -65,7 +65,7 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
                       className={cn(
                         'inline-flex rounded-full px-2.5 py-1 text-xs font-bold',
                         customer.kind === 'COMPANY'
-                          ? 'bg-soft-cobalt text-cobalt'
+                          ? 'bg-primary/10 text-primary'
                           : 'bg-slate-100 text-slate-600',
                       )}
                     >
@@ -94,7 +94,7 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
                         href={`/dashboard/customers/${customer.publicId}`}
                         title="Fiche client"
                         aria-label="Fiche client"
-                        className={cn(iconBtn, 'text-cobalt hover:bg-soft-cobalt')}
+                        className={cn(iconBtn, 'text-primary hover:bg-primary/10')}
                       >
                         <IconEye className="h-4 w-4" />
                       </Link>
@@ -102,7 +102,7 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
                         type="button"
                         title="Éditer"
                         aria-label="Éditer"
-                        className={cn(iconBtn, 'text-cobalt hover:bg-soft-cobalt')}
+                        className={cn(iconBtn, 'text-primary hover:bg-primary/10')}
                         onClick={() => onEdit(customer)}
                       >
                         <IconPencil className="h-4 w-4" />

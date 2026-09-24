@@ -312,7 +312,7 @@ export function PosWorkspace() {
                   type="button"
                   title="Nouveau produit rapide"
                   aria-label="Nouveau produit rapide"
-                  className="mb-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-cobalt transition-all duration-200 hover:bg-soft-cobalt"
+                  className="mb-0 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-all duration-200 hover:bg-primary/10"
                   onClick={() => setQuickOpen(true)}
                 >
                   <IconPlus className="h-4 w-4" />
@@ -326,18 +326,18 @@ export function PosWorkspace() {
                         type="button"
                         className={cn(
                           'flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm',
-                          index === highlight ? 'bg-soft-cobalt' : 'hover:bg-powder',
+                          index === highlight ? 'bg-primary/10' : 'hover:bg-powder',
                         )}
                         onMouseEnter={() => setHighlight(index)}
                         onClick={() => addProduct(product)}
                       >
                         <span>
-                          <span className="font-bold text-cobalt">{product.code}</span>
+                          <span className="font-bold text-primary">{product.code}</span>
                           <span className="ml-2">{product.designation}</span>
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="block font-bold">{formatCfa(product.unitPrice)}</span>
-                          <span className={cn('text-xs', isServiceProduct(product.type) ? 'text-cobalt' : stockTone(product.stock))}>
+                          <span className={cn('text-xs', isServiceProduct(product.type) ? 'text-primary' : stockTone(product.stock))}>
                             {isServiceProduct(product.type) ? 'Prestation' : `Stock ${product.stock}`}
                           </span>
                         </span>
@@ -397,11 +397,11 @@ export function PosWorkspace() {
                 onClick={() => addProduct(product)}
                 className={cn(
                   'rounded-2xl border border-subtle-border bg-white p-4 text-left shadow-sm transition-all duration-200',
-                  'hover:border-cobalt hover:bg-soft-cobalt/60',
+                  'hover:border-primary hover:bg-primary/10',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}
               >
-                <Text size="sm" className="font-bold text-cobalt">
+                <Text size="sm" className="font-bold text-primary">
                   {product.code}
                 </Text>
                 <Text weight="bold" className="mt-1 line-clamp-2">
@@ -409,7 +409,7 @@ export function PosWorkspace() {
                 </Text>
                 <div className="mt-3 flex items-end justify-between gap-2">
                   <span className="text-lg font-bold">{formatCfa(product.unitPrice)}</span>
-                  <span className={cn('text-xs font-bold', service ? 'text-cobalt' : stockTone(left))}>
+                  <span className={cn('text-xs font-bold', service ? 'text-primary' : stockTone(left))}>
                     {service ? 'Prestation' : `Stock ${left}`}
                   </span>
                 </div>
@@ -505,7 +505,7 @@ export function PosWorkspace() {
                 <span>{formatCfa(totals.vat)}</span>
               </div>
             ) : null}
-            <div className="flex justify-between text-lg font-bold text-cobalt">
+            <div className="flex justify-between text-lg font-bold text-primary">
               <span>Net à payer</span>
               <span>{formatCfa(totals.ttc)}</span>
             </div>
@@ -525,7 +525,7 @@ export function PosWorkspace() {
                   className={cn(
                     'rounded-full border px-3 py-2 text-sm font-bold transition-all duration-200',
                     paymentMethod === method
-                      ? 'border-cobalt bg-soft-cobalt text-cobalt'
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-subtle-border bg-white text-foreground hover:bg-powder',
                   )}
                 >
